@@ -1064,7 +1064,7 @@ MVP 이후 고려할 기능:
 ## 21. 권장 개발 순서 요약
 
 - [x] 1. Next.js, Tailwind CSS, Shadcn UI, Prisma, Postgres 초기화
-- [ ] 2. Google OAuth와 허용 이메일 접근 제어 구현
+- [x] 2. Google OAuth와 허용 이메일 접근 제어 구현
 - [ ] 3. Prisma 데이터 모델과 아이콘 API 구현
 - [ ] 4. 메인 아이콘 세로 목록과 병합용 리소스 섹션 레이아웃 구현
 - [ ] 5. SVG 업로드 다이얼로그, sanitize, 메인 아이콘 기준점 좌표 입력 구현
@@ -1073,4 +1073,31 @@ MVP 이후 고려할 기능:
 - [ ] 8. 속성 패널과 초기화 기능 구현
 - [ ] 9. SVG, PNG, JPG 다운로드 구현
 - [ ] 10. 테스트, 접근성, 반응형, 배포 설정 보강
+
+### 2단계 구현 결과
+
+Google OAuth 인증과 허용 이메일 접근 제어는 NextAuth 기반으로 구현했다.
+
+- `next-auth`를 추가하고 JWT 세션 전략을 사용한다.
+- Google OAuth Route Handler는 `src/app/api/auth/[...nextauth]/route.ts`에 둔다.
+- 공통 인증 설정은 `src/lib/auth/options.ts`에 둔다.
+- 허용 이메일 파싱과 검증은 `src/lib/auth/allowed-emails.ts`에서 처리한다.
+- Next.js 16의 `proxy.ts` 파일 컨벤션을 사용해 인증되지 않은 사용자의 앱 접근을 `/auth/signin`으로 보낸다.
+- 로그인 화면은 `/auth/signin`이며, Google 로그인 버튼과 접근 거부 안내를 제공한다.
+- 홈 화면은 서버 세션을 읽어 허용 이메일로 로그인한 사용자에게만 표시된다.
+- 로그인 후 이동할 `callbackUrl`은 같은 origin 또는 상대 경로만 허용한다.
+
+필요한 환경 변수는 다음과 같다.
+
+- `NEXTAUTH_URL`
+- `NEXTAUTH_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `ALLOWED_GOOGLE_EMAILS`
+
+로컬 검증은 다음 기준으로 완료했다.
+
+- `npm run lint` 성공
+- `npm run build` 성공
+- 로컬 브라우저에서 허용 이메일 Google 계정 로그인 성공 확인
 

@@ -6,7 +6,13 @@
 
 ## 현재 상태
 
-- 현재까지 코딩은 진행하지 않았고, 개발 구현 계획 문서만 작성했다.
+- 1단계 초기화 구현과 2단계 Google OAuth 접근 제어 구현을 완료했다.
+- 로컬 환경 변수 설정 후 허용 이메일 Google 계정으로 로그인 테스트를 완료했다.
+- Next.js App Router, TypeScript, Tailwind CSS, Shadcn UI, Prisma, Supabase Postgres 중심 DB 설정이 적용되어 있다.
+- `docs/development-plan.md`의 21번 체크리스트에서 1, 2단계가 완료 처리되어 있다.
+- 초기화 작업은 `main` 브랜치에 커밋 및 원격 푸시 완료 상태다.
+  - 커밋: `ac06308 Initialize Next.js project foundation`
+  - 원격: `https://github.com/tiper2066/Icon-Merger.git`
 - 주요 계획 문서: `docs/development-plan.md`
 - 요구사항 원문: `docs/project-overview.md`
 - UI 참고 이미지:
@@ -27,9 +33,16 @@
 - Prisma
 - PostgreSQL 계열 DB
 - 초기 개발 DB: Supabase Postgres
+- Prisma 앱 런타임 연결은 `DATABASE_URL`을 사용한다.
+- Prisma CLI, migration, schema 작업 연결은 `DIRECT_URL`을 우선 사용한다.
+- 현재 Supabase 제약상 `DATABASE_URL`은 Transaction Pooler, `DIRECT_URL`은 Session Pooler로 설정해 테스트했다.
 - 사내망 이전 DB: Docker 기반 PostgreSQL
 - 인증: Google OAuth
 - 로그인 제한: 허용된 Google 이메일 계정만 접근 가능
+- 허용 이메일 목록은 `ALLOWED_GOOGLE_EMAILS` 환경 변수에 쉼표 구분으로 설정한다.
+- NextAuth 설정은 `src/lib/auth/options.ts`, OAuth Route Handler는 `src/app/api/auth/[...nextauth]/route.ts`, 보호 라우팅은 Next.js 16 `src/proxy.ts`에 있다.
+- 로그인 UI는 `src/app/auth/signin/page.tsx`, 로그인/로그아웃 버튼은 `src/components/auth/`에 있다.
+- Google OAuth callback URL은 로컬 기준 `http://localhost:3000/api/auth/callback/google`이다.
 
 ## 저장 전략
 
@@ -103,14 +116,24 @@
 
 `docs/development-plan.md`의 `21. 권장 개발 순서 요약` 체크리스트를 따라 진행한다.
 
-1. Next.js, Tailwind CSS, Shadcn UI, Prisma, Postgres 초기화
-2. Google OAuth와 허용 이메일 접근 제어 구현
-3. Prisma 데이터 모델과 아이콘 API 구현
-4. 메인 아이콘 세로 목록과 병합용 리소스 섹션 레이아웃 구현
-5. SVG 업로드 다이얼로그, sanitize, 메인 아이콘 기준점 좌표 입력 구현
-6. 아이콘 선택, 더보기 메뉴 기반 전체 선택, 선택 해제, 삭제 구현
-7. SVG 정규화와 anchor 기반 병합 미리보기 구현
-8. 속성 패널과 초기화 기능 구현
-9. SVG, PNG, JPG 다운로드 구현
-10. 테스트, 접근성, 반응형, 배포 설정 보강
+1. Prisma 데이터 모델과 아이콘 API 구현
+2. 메인 아이콘 세로 목록과 병합용 리소스 섹션 레이아웃 구현
+3. SVG 업로드 다이얼로그, sanitize, 메인 아이콘 기준점 좌표 입력 구현
+4. 아이콘 선택, 더보기 메뉴 기반 전체 선택, 선택 해제, 삭제 구현
+5. SVG 정규화와 anchor 기반 병합 미리보기 구현
+6. 속성 패널과 초기화 기능 구현
+7. SVG, PNG, JPG 다운로드 구현
+8. 테스트, 접근성, 반응형, 배포 설정 보강
+
+## 최근 검증 결과
+
+- 허용 이메일 Google 계정으로 로컬 로그인 성공 확인
+- 2단계 인증 구현 후 `npm run lint` 성공
+- 2단계 인증 구현 후 `npm run build` 성공
+- `DATABASE_URL` 연결 테스트 성공
+- `DIRECT_URL` 연결 테스트 성공
+- `npm run db:validate` 성공
+- `npm run db:generate` 성공
+- `npm run lint` 성공
+- `npm run build` 성공
 
