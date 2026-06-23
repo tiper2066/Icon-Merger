@@ -1063,7 +1063,7 @@ MVP 이후 고려할 기능:
 
 ## 21. 권장 개발 순서 요약
 
-- [ ] 1. Next.js, Tailwind CSS, Shadcn UI, Prisma, Postgres 초기화
+- [x] 1. Next.js, Tailwind CSS, Shadcn UI, Prisma, Postgres 초기화
 - [ ] 2. Google OAuth와 허용 이메일 접근 제어 구현
 - [ ] 3. Prisma 데이터 모델과 아이콘 API 구현
 - [ ] 4. 메인 아이콘 세로 목록과 병합용 리소스 섹션 레이아웃 구현
