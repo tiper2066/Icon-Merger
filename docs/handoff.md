@@ -6,10 +6,10 @@
 
 ## 현재 상태
 
-- 1단계 초기화, 2단계 Google OAuth 접근 제어, 3단계 Prisma 데이터 모델과 아이콘 API, 4단계 메인 작업 화면 UI, 5단계 SVG 업로드, 6단계 아이콘 선택/삭제 구현을 완료했다.
+- 1단계 초기화, 2단계 Google OAuth 접근 제어, 3단계 Prisma 데이터 모델과 아이콘 API, 4단계 메인 작업 화면 UI, 5단계 SVG 업로드, 6단계 아이콘 선택/삭제, 7단계 anchor 기반 병합 미리보기 구현을 완료했다.
 - 로컬 환경 변수 설정 후 허용 이메일 Google 계정으로 로그인 테스트를 완료했다.
 - Next.js App Router, TypeScript, Tailwind CSS, Shadcn UI, Prisma, Supabase Postgres 중심 DB 설정이 적용되어 있다.
-- `docs/development-plan.md`의 21번 체크리스트에서 1, 2, 3, 4, 5, 6단계가 완료 처리되어 있다.
+- `docs/development-plan.md`의 21번 체크리스트에서 1, 2, 3, 4, 5, 6, 7단계가 완료 처리되어 있다.
 - 초기화 작업은 `main` 브랜치에 커밋 및 원격 푸시 완료 상태다.
   - 커밋: `ac06308 Initialize Next.js project foundation`
   - 원격: `https://github.com/tiper2066/Icon-Merger.git`
@@ -82,7 +82,7 @@
 - 앱 기본 폰트는 공식 `pretendard` 패키지의 Pretendard Variable을 사용한다.
 - 버튼은 기본적으로 아이콘 없이 텍스트만 표시하며, 텍스트 세로 정렬과 hover 커서를 공통 버튼 스타일에서 보정한다.
 - 헤더의 사용자 이름과 이메일은 한 줄로 표시하고, 로그아웃 버튼은 작은 버튼 크기 기준을 사용한다.
-- 실제 선택 상태 변경, 전체 선택, 삭제 확인은 연결되었고, 속성 조정 동작은 아직 연결 전이다.
+- 실제 선택 상태 변경, 전체 선택, 삭제 확인, anchor 기반 병합 미리보기는 연결되었고, 속성 조정 동작은 아직 연결 전이다.
 
 ## 업로드 정책
 
@@ -114,6 +114,12 @@
 - 병합용 아이콘 또는 텍스트 SVG의 좌측 상단을 메인 아이콘의 `anchorX`, `anchorY`에 맞춘다.
 - 최종 SVG 크기는 최초 메인 아이콘 크기를 유지하지 않고 전체 bounding box 기준으로 다시 계산한다.
 - 최종 `viewBox`는 `0 0 resultWidth resultHeight`로 설정한다.
+- `src/lib/svg/merge-svg.ts`가 SVG 루트 `viewBox`와 내부 콘텐츠를 분리하고, 결과 SVG 안에 `main`/`merge` 그룹을 배치한다.
+- viewBox 시작점이 0이 아닌 SVG도 minX/minY 보정을 통해 결과 좌표계에서 병합한다.
+- 우측 속성 패널은 선택된 대표 조합을 `메인 + 리소스 = 결과` 구조로 즉시 표시한다.
+- 2개 이상 선택된 경우 마지막으로 직접 선택한 메인/리소스를 대표 미리보기 대상으로 사용한다.
+- 우측 속성 패널의 `대표 미리보기` 영역에 현재 표시 중인 조합 이름을 `메인 + 리소스` 형태로 보여준다.
+- 속성 패널 미리보기의 라인 아이콘은 `src/app/globals.css`의 SVG preview 전용 클래스에서 fill/stroke를 보정한다.
 - MVP에서는 대표 조합 1개만 미리보기와 다운로드 대상으로 사용한다.
 - 여러 조합 일괄 생성과 ZIP 다운로드는 향후 확장 기능이다.
 
@@ -144,14 +150,15 @@
 
 `docs/development-plan.md`의 `21. 권장 개발 순서 요약` 체크리스트를 따라 진행한다.
 
-1. SVG 정규화와 anchor 기반 병합 미리보기 구현
-2. 속성 패널과 초기화 기능 구현
-3. SVG, PNG, JPG 다운로드 구현
-4. 테스트, 접근성, 반응형, 배포 설정 보강
+1. 속성 패널과 초기화 기능 구현
+2. SVG, PNG, JPG 다운로드 구현
+3. 테스트, 접근성, 반응형, 배포 설정 보강
 
 ## 최근 검증 결과
 
 - 허용 이메일 Google 계정으로 로컬 로그인 성공 확인
+- 7단계 병합 미리보기 구현 후 `npm run lint` 성공
+- 7단계 병합 미리보기 구현 후 `npm run build` 성공
 - 6단계 후속 UI 보정 후 `npm run lint` 성공
 - 6단계 후속 UI 보정 후 `npm run build` 성공
 - 6단계 아이콘 선택/삭제 구현 후 `npm run lint` 성공

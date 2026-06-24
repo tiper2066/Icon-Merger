@@ -129,3 +129,21 @@
     @apply font-sans;
   }
 }
+
+@layer components {
+  .svg-line-preview svg * {
+    fill: none;
+    stroke: currentColor;
+  }
+
+  .svg-merged-icon-preview svg [data-layer="main"] *,
+  .svg-merged-icon-preview svg [data-layer="merge"] * {
+    fill: none;
+    stroke: currentColor;
+  }
+
+  .svg-merged-text-preview svg [data-layer="main"] * {
+    fill: none;
+    stroke: currentColor;
+  }
+}

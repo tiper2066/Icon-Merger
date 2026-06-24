@@ -24,6 +24,10 @@ import {
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Button } from "@/components/ui/button";
 import { IconType } from "@/generated/prisma/enums";
+import {
+  mergeSvgsByAnchor,
+  type MergedSvgResult,
+} from "@/lib/svg/merge-svg";
 
 const iconColorOptions = [
   { label: "1번 색상", value: "#0060A9" },
@@ -61,11 +65,23 @@ type IconWorkspaceProps = {
 };
 
 type SelectedIconIds = Record<IconTypeValue, string[]>;
+type ResourceIconType = typeof IconType.MERGE_ICON | typeof IconType.MERGE_TEXT;
+type RepresentativeSelection = {
+  mainIconId: string | null;
+  resourceIconId: string | null;
+  resourceType: ResourceIconType | null;
+};
 
 const emptySelectedIconIds: SelectedIconIds = {
   [IconType.MAIN]: [],
   [IconType.MERGE_ICON]: [],
   [IconType.MERGE_TEXT]: [],
+};
+
+const emptyRepresentativeSelection: RepresentativeSelection = {
+  mainIconId: null,
+  resourceIconId: null,
+  resourceType: null,
 };
 
 export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
@@ -74,6 +90,8 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
   const [selectedIconIds, setSelectedIconIds] = useState<SelectedIconIds>(
     emptySelectedIconIds,
   );
+  const [representativeSelection, setRepresentativeSelection] =
+    useState<RepresentativeSelection>(emptyRepresentativeSelection);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     type: IconTypeValue;
     title: string;
@@ -92,8 +110,105 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
     () => icons.filter((icon) => icon.type === IconType.MERGE_TEXT),
     [icons],
   );
+  const selectedMainIcon = useMemo(
+    () => {
+      const representativeMainIcon = representativeSelection.mainIconId
+        ? mainIcons.find(
+            (icon) =>
+              icon.id === representativeSelection.mainIconId &&
+              selectedIconIds[IconType.MAIN].includes(icon.id),
+          )
+        : null;
+
+      return (
+        representativeMainIcon ??
+        findLastSelectedIcon(mainIcons, selectedIconIds[IconType.MAIN])
+      );
+    },
+    [mainIcons, representativeSelection.mainIconId, selectedIconIds],
+  );
+  const selectedResourceIcon = useMemo(
+    () => {
+      const representativeResourceIcons =
+        representativeSelection.resourceType === IconType.MERGE_TEXT
+          ? mergeTexts
+          : mergeIcons;
+      const representativeResourceSelectedIds =
+        representativeSelection.resourceType === IconType.MERGE_TEXT
+          ? selectedIconIds[IconType.MERGE_TEXT]
+          : selectedIconIds[IconType.MERGE_ICON];
+      const representativeResourceIcon =
+        representativeSelection.resourceType && representativeSelection.resourceIconId
+          ? representativeResourceIcons.find(
+              (icon) =>
+                icon.id === representativeSelection.resourceIconId &&
+                representativeResourceSelectedIds.includes(icon.id),
+            )
+          : null;
+
+      return (
+        representativeResourceIcon ??
+        findLastSelectedIcon(mergeIcons, selectedIconIds[IconType.MERGE_ICON]) ??
+        findLastSelectedIcon(mergeTexts, selectedIconIds[IconType.MERGE_TEXT])
+      );
+    },
+    [
+      mergeIcons,
+      mergeTexts,
+      representativeSelection.resourceIconId,
+      representativeSelection.resourceType,
+      selectedIconIds,
+    ],
+  );
+  const selectedMainCount = selectedIconIds[IconType.MAIN].length;
+  const selectedResourceCount =
+    selectedIconIds[IconType.MERGE_ICON].length +
+    selectedIconIds[IconType.MERGE_TEXT].length;
+  const mergedPreview = useMemo(() => {
+    if (!selectedMainIcon || !selectedResourceIcon) {
+      return null;
+    }
+
+    return mergeSvgsByAnchor(selectedMainIcon, selectedResourceIcon);
+  }, [selectedMainIcon, selectedResourceIcon]);
 
   function toggleIconSelection(type: IconTypeValue, iconId: string) {
+    const isSelected = selectedIconIds[type].includes(iconId);
+
+    setRepresentativeSelection((currentSelection) => {
+      if (!isSelected && type === IconType.MAIN) {
+        return {
+          ...currentSelection,
+          mainIconId: iconId,
+        };
+      }
+
+      if (!isSelected && isResourceIconType(type)) {
+        return {
+          ...currentSelection,
+          resourceIconId: iconId,
+          resourceType: type,
+        };
+      }
+
+      if (isSelected && type === IconType.MAIN && currentSelection.mainIconId === iconId) {
+        return {
+          ...currentSelection,
+          mainIconId: null,
+        };
+      }
+
+      if (isSelected && currentSelection.resourceIconId === iconId) {
+        return {
+          ...currentSelection,
+          resourceIconId: null,
+          resourceType: null,
+        };
+      }
+
+      return currentSelection;
+    });
+
     setSelectedIconIds((currentSelection) => {
       const selectedIds = currentSelection[type];
 
@@ -107,6 +222,29 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
   }
 
   function selectAllIcons(type: IconTypeValue, targetIcons: WorkspaceIcon[]) {
+    const representativeIcon = targetIcons[0];
+
+    if (representativeIcon) {
+      setRepresentativeSelection((currentSelection) => {
+        if (type === IconType.MAIN) {
+          return {
+            ...currentSelection,
+            mainIconId: representativeIcon.id,
+          };
+        }
+
+        if (isResourceIconType(type)) {
+          return {
+            ...currentSelection,
+            resourceIconId: representativeIcon.id,
+            resourceType: type,
+          };
+        }
+
+        return currentSelection;
+      });
+    }
+
     setSelectedIconIds((currentSelection) => ({
       ...currentSelection,
       [type]: targetIcons.map((icon) => icon.id),
@@ -114,6 +252,25 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
   }
 
   function clearIconSelection(type: IconTypeValue) {
+    setRepresentativeSelection((currentSelection) => {
+      if (type === IconType.MAIN) {
+        return {
+          ...currentSelection,
+          mainIconId: null,
+        };
+      }
+
+      if (isResourceIconType(type) && currentSelection.resourceType === type) {
+        return {
+          ...currentSelection,
+          resourceIconId: null,
+          resourceType: null,
+        };
+      }
+
+      return currentSelection;
+    });
+
     setSelectedIconIds((currentSelection) => ({
       ...currentSelection,
       [type]: [],
@@ -242,7 +399,13 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
           />
         </section>
 
-        <PropertiesPanel />
+        <PropertiesPanel
+          mainIcon={selectedMainIcon}
+          mergedPreview={mergedPreview}
+          resourceIcon={selectedResourceIcon}
+          selectedMainCount={selectedMainCount}
+          selectedResourceCount={selectedResourceCount}
+        />
       </div>
 
       {uploadType ? (
@@ -1087,7 +1250,27 @@ function UploadDialog({
   );
 }
 
-function PropertiesPanel() {
+type PropertiesPanelProps = {
+  mainIcon: WorkspaceIcon | null;
+  resourceIcon: WorkspaceIcon | null;
+  mergedPreview: MergedSvgResult | null;
+  selectedMainCount: number;
+  selectedResourceCount: number;
+};
+
+function PropertiesPanel({
+  mainIcon,
+  resourceIcon,
+  mergedPreview,
+  selectedMainCount,
+  selectedResourceCount,
+}: PropertiesPanelProps) {
+  const isMissingSelection = !mainIcon || !resourceIcon;
+  const isMissingAnchor =
+    Boolean(mainIcon && resourceIcon) && !mergedPreview;
+  const hasMultiplePreviewCandidates =
+    selectedMainCount > 1 || selectedResourceCount > 1;
+
   return (
     <aside className="flex min-h-0 flex-col rounded-[16px] border border-[#ECEEF2] bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
       <div className="flex items-start justify-between gap-4">
@@ -1105,13 +1288,54 @@ function PropertiesPanel() {
       </div>
 
       <div className="mt-6 rounded-[12px] border border-[#ECEEF2] bg-[#F7F8FA] p-4">
-        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-3">
-          <PreviewTile label="메인" />
-          <span className="text-sm font-semibold text-[#747E93]">+</span>
-          <PreviewTile label="리소스" />
-          <span className="text-sm font-semibold text-[#747E93]">=</span>
-          <PreviewTile label="결과" active />
+        <div className="mb-3 rounded-[10px] border border-[#D9DCE3] bg-white px-3 py-2">
+          <p className="text-xs font-semibold tracking-[0.25px] text-[#545D70]">
+            대표 미리보기
+          </p>
+          <p className="mt-1 truncate text-sm font-medium text-[#111620]">
+            {mainIcon && resourceIcon
+              ? `${mainIcon.name} + ${resourceIcon.name}`
+              : "선택된 대표 조합 없음"}
+          </p>
+          {hasMultiplePreviewCandidates ? (
+            <p className="mt-1 text-xs leading-4 text-[#747E93]">
+              마지막으로 선택한 항목을 대표로 표시합니다.
+            </p>
+          ) : null}
         </div>
+        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-3">
+          <PreviewTile
+            icon={mainIcon}
+            kind="icon"
+            label="메인"
+          />
+          <span className="text-sm font-semibold text-[#747E93]">+</span>
+          <PreviewTile
+            icon={resourceIcon}
+            kind={resourceIcon?.type === IconType.MERGE_TEXT ? "text" : "icon"}
+            label="리소스"
+          />
+          <span className="text-sm font-semibold text-[#747E93]">=</span>
+          <PreviewTile
+            active
+            icon={mergedPreview}
+            kind={resourceIcon?.type === IconType.MERGE_TEXT ? "merged-text" : "merged-icon"}
+            label="결과"
+          />
+        </div>
+        {isMissingSelection ? (
+          <p className="mt-4 text-center text-xs leading-4 text-[#747E93]">
+            메인 아이콘 1개와 병합용 아이콘 또는 텍스트 SVG 1개를 선택하면 병합 결과가 표시됩니다.
+          </p>
+        ) : isMissingAnchor ? (
+          <p className="mt-4 text-center text-xs leading-4 text-[#B91C1C]">
+            선택한 메인 아이콘에 anchor 좌표가 없어 병합 미리보기를 만들 수 없습니다.
+          </p>
+        ) : mergedPreview ? (
+          <p className="mt-4 text-center text-xs leading-4 text-[#545D70]">
+            결과 크기 {formatDimension(mergedPreview.width)} x {formatDimension(mergedPreview.height)}
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-6 space-y-6">
@@ -1173,21 +1397,57 @@ function PropertiesPanel() {
 
 type PreviewTileProps = {
   label: string;
+  icon?: (Pick<WorkspaceIcon, "svgContent"> | MergedSvgResult) | null;
+  kind?: "icon" | "text" | "merged-icon" | "merged-text";
   active?: boolean;
 };
 
-function PreviewTile({ label, active = false }: PreviewTileProps) {
+function PreviewTile({
+  label,
+  icon = null,
+  kind = "icon",
+  active = false,
+}: PreviewTileProps) {
+  const previewClassName = getPreviewSvgClassName(kind);
+
   return (
     <div
       className={
         active
-          ? "flex aspect-square items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-[#EBF2FF] text-xs font-semibold text-[#124199]"
-          : "flex aspect-square items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white text-xs font-medium text-[#747E93]"
+          ? "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-[#EBF2FF] p-2 text-xs font-semibold text-[#124199]"
+          : "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-2 text-xs font-medium text-[#747E93]"
       }
     >
-      {label}
+      {icon?.svgContent ? (
+        <div
+          aria-label={label}
+          className={previewClassName}
+          dangerouslySetInnerHTML={{ __html: icon.svgContent }}
+          role="img"
+        />
+      ) : (
+        label
+      )}
     </div>
   );
+}
+
+function getPreviewSvgClassName(kind: NonNullable<PreviewTileProps["kind"]>) {
+  const baseClassName = "flex size-full items-center justify-center text-[#111620]";
+
+  if (kind === "text") {
+    return `${baseClassName} [&_svg]:h-8 [&_svg]:w-auto [&_svg]:max-w-full`;
+  }
+
+  if (kind === "merged-text") {
+    return `${baseClassName} svg-merged-text-preview [&_svg]:h-8 [&_svg]:w-8`;
+  }
+
+  if (kind === "merged-icon") {
+    return `${baseClassName} svg-merged-icon-preview [&_svg]:h-8 [&_svg]:w-8`;
+  }
+
+  return `${baseClassName} svg-line-preview [&_svg]:h-8 [&_svg]:w-8`;
 }
 
 type PropertyGroupProps = {
@@ -1307,6 +1567,23 @@ function formatCoordinate(value: number) {
   return Number((Math.round(value * 2) / 2).toFixed(1)).toString();
 }
 
+function formatDimension(value: number) {
+  return Number(value.toFixed(1)).toString();
+}
+
+function findLastSelectedIcon<TIcon extends { id: string }>(
+  icons: TIcon[],
+  selectedIds: string[],
+) {
+  const lastSelectedId = selectedIds.at(-1);
+
+  if (!lastSelectedId) {
+    return null;
+  }
+
+  return icons.find((icon) => icon.id === lastSelectedId) ?? null;
+}
+
 function getTextCardWidth(icon: WorkspaceIcon) {
   const ratio = icon.width / icon.height;
 
@@ -1315,5 +1592,9 @@ function getTextCardWidth(icon: WorkspaceIcon) {
 
 function isClientSvgFile(file: File) {
   return file.name.toLowerCase().endsWith(".svg") && file.type === "image/svg+xml";
+}
+
+function isResourceIconType(type: IconTypeValue): type is ResourceIconType {
+  return type === IconType.MERGE_ICON || type === IconType.MERGE_TEXT;
 }
 
