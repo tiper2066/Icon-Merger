@@ -2,16 +2,11 @@
 
 import {
   ChevronDown,
-  Download,
-  MoreHorizontal,
   Palette,
-  Plus,
-  RotateCcw,
   Settings2,
   Trash2,
   Type,
   UploadCloud,
-  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -65,11 +60,113 @@ type IconWorkspaceProps = {
   icons: WorkspaceIcon[];
 };
 
+type SelectedIconIds = Record<IconTypeValue, string[]>;
+
+const emptySelectedIconIds: SelectedIconIds = {
+  [IconType.MAIN]: [],
+  [IconType.MERGE_ICON]: [],
+  [IconType.MERGE_TEXT]: [],
+};
+
 export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
+  const router = useRouter();
   const [uploadType, setUploadType] = useState<UploadType | null>(null);
-  const mainIcons = icons.filter((icon) => icon.type === IconType.MAIN);
-  const mergeIcons = icons.filter((icon) => icon.type === IconType.MERGE_ICON);
-  const mergeTexts = icons.filter((icon) => icon.type === IconType.MERGE_TEXT);
+  const [selectedIconIds, setSelectedIconIds] = useState<SelectedIconIds>(
+    emptySelectedIconIds,
+  );
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    type: IconTypeValue;
+    title: string;
+  } | null>(null);
+  const [deletingType, setDeletingType] = useState<IconTypeValue | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const mainIcons = useMemo(
+    () => icons.filter((icon) => icon.type === IconType.MAIN),
+    [icons],
+  );
+  const mergeIcons = useMemo(
+    () => icons.filter((icon) => icon.type === IconType.MERGE_ICON),
+    [icons],
+  );
+  const mergeTexts = useMemo(
+    () => icons.filter((icon) => icon.type === IconType.MERGE_TEXT),
+    [icons],
+  );
+
+  function toggleIconSelection(type: IconTypeValue, iconId: string) {
+    setSelectedIconIds((currentSelection) => {
+      const selectedIds = currentSelection[type];
+
+      return {
+        ...currentSelection,
+        [type]: selectedIds.includes(iconId)
+          ? selectedIds.filter((id) => id !== iconId)
+          : [...selectedIds, iconId],
+      };
+    });
+  }
+
+  function selectAllIcons(type: IconTypeValue, targetIcons: WorkspaceIcon[]) {
+    setSelectedIconIds((currentSelection) => ({
+      ...currentSelection,
+      [type]: targetIcons.map((icon) => icon.id),
+    }));
+  }
+
+  function clearIconSelection(type: IconTypeValue) {
+    setSelectedIconIds((currentSelection) => ({
+      ...currentSelection,
+      [type]: [],
+    }));
+  }
+
+  function requestDeleteSelected(type: IconTypeValue, title: string) {
+    if (selectedIconIds[type].length === 0) {
+      return;
+    }
+
+    setDeleteError(null);
+    setDeleteConfirmation({ type, title });
+  }
+
+  async function confirmDeleteSelected() {
+    if (!deleteConfirmation) {
+      return;
+    }
+
+    const { type } = deleteConfirmation;
+    const ids = selectedIconIds[type];
+
+    if (ids.length === 0) {
+      setDeleteConfirmation(null);
+      return;
+    }
+
+    setDeletingType(type);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch("/api/icons", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids }),
+      });
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setDeleteError(data.error ?? "선택한 아이콘 삭제에 실패했습니다.");
+        return;
+      }
+
+      clearIconSelection(type);
+      setDeleteConfirmation(null);
+      router.refresh();
+    } finally {
+      setDeletingType(null);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#F7F8FA] text-[#111620]">
@@ -82,12 +179,12 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
             SVG 아이콘 작업 공간
           </h1>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-sm font-medium text-[#111620]">
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2 whitespace-nowrap text-sm">
+            <span className="font-medium text-[#111620]">
               {user.name ?? "허용된 사용자"}
-            </p>
-            <p className="text-xs text-[#545D70]">{user.email}</p>
+            </span>
+            <span className="text-[#545D70]">{user.email}</span>
           </div>
           <SignOutButton />
         </div>
@@ -102,7 +199,13 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
           emptyDescription="SVG 업로드 후 이곳에 메인 아이콘이 표시됩니다."
           icons={mainIcons}
           layout="list"
+          selectedIds={selectedIconIds[IconType.MAIN]}
+          isDeleting={deletingType === IconType.MAIN}
           onAdd={() => setUploadType(IconType.MAIN)}
+          onClearSelection={() => clearIconSelection(IconType.MAIN)}
+          onDeleteSelected={() => requestDeleteSelected(IconType.MAIN, "메인 아이콘")}
+          onSelectAll={() => selectAllIcons(IconType.MAIN, mainIcons)}
+          onToggleIcon={(iconId) => toggleIconSelection(IconType.MAIN, iconId)}
         />
 
         <section className="flex min-w-0 flex-col gap-6">
@@ -113,7 +216,13 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
             emptyTitle="병합용 아이콘이 없습니다"
             emptyDescription="업로드 후 여러 아이콘 중 하나를 선택할 수 있습니다."
             icons={mergeIcons}
+            selectedIds={selectedIconIds[IconType.MERGE_ICON]}
+            isDeleting={deletingType === IconType.MERGE_ICON}
             onAdd={() => setUploadType(IconType.MERGE_ICON)}
+            onClearSelection={() => clearIconSelection(IconType.MERGE_ICON)}
+            onDeleteSelected={() => requestDeleteSelected(IconType.MERGE_ICON, "병합용 아이콘")}
+            onSelectAll={() => selectAllIcons(IconType.MERGE_ICON, mergeIcons)}
+            onToggleIcon={(iconId) => toggleIconSelection(IconType.MERGE_ICON, iconId)}
           />
           <ResourceSection
             title="텍스트 SVG"
@@ -123,7 +232,13 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
             emptyDescription="텍스트 SVG를 업로드하면 별도 섹션으로 관리됩니다."
             icons={mergeTexts}
             iconKind="text"
+            selectedIds={selectedIconIds[IconType.MERGE_TEXT]}
+            isDeleting={deletingType === IconType.MERGE_TEXT}
             onAdd={() => setUploadType(IconType.MERGE_TEXT)}
+            onClearSelection={() => clearIconSelection(IconType.MERGE_TEXT)}
+            onDeleteSelected={() => requestDeleteSelected(IconType.MERGE_TEXT, "텍스트 SVG")}
+            onSelectAll={() => selectAllIcons(IconType.MERGE_TEXT, mergeTexts)}
+            onToggleIcon={(iconId) => toggleIconSelection(IconType.MERGE_TEXT, iconId)}
           />
         </section>
 
@@ -134,6 +249,21 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
         <UploadDialog
           type={uploadType}
           onClose={() => setUploadType(null)}
+        />
+      ) : null}
+      {deleteConfirmation ? (
+        <DeleteConfirmDialog
+          errorMessage={deleteError}
+          isDeleting={deletingType === deleteConfirmation.type}
+          selectedCount={selectedIconIds[deleteConfirmation.type].length}
+          title={deleteConfirmation.title}
+          onCancel={() => {
+            if (!deletingType) {
+              setDeleteConfirmation(null);
+              setDeleteError(null);
+            }
+          }}
+          onConfirm={confirmDeleteSelected}
         />
       ) : null}
     </main>
@@ -147,7 +277,13 @@ type IconPanelProps = {
   emptyTitle: string;
   emptyDescription: string;
   icons: WorkspaceIcon[];
+  selectedIds: string[];
+  isDeleting: boolean;
   onAdd: () => void;
+  onClearSelection: () => void;
+  onDeleteSelected: () => void;
+  onSelectAll: () => void;
+  onToggleIcon: (iconId: string) => void;
   layout?: "list" | "grid";
   iconKind?: "icon" | "text";
 };
@@ -159,7 +295,13 @@ function IconPanel({
   emptyTitle,
   emptyDescription,
   icons,
+  selectedIds,
+  isDeleting,
   onAdd,
+  onClearSelection,
+  onDeleteSelected,
+  onSelectAll,
+  onToggleIcon,
   layout = "grid",
   iconKind = "icon",
 }: IconPanelProps) {
@@ -169,8 +311,13 @@ function IconPanel({
         title={title}
         description={description}
         actionLabel={actionLabel}
-        selectedCount={0}
+        selectedCount={selectedIds.length}
+        totalCount={icons.length}
+        isDeleting={isDeleting}
         onAdd={onAdd}
+        onClearSelection={onClearSelection}
+        onDeleteSelected={onDeleteSelected}
+        onSelectAll={onSelectAll}
       />
 
       <div
@@ -184,7 +331,14 @@ function IconPanel({
       >
         {icons.length > 0 ? (
           icons.map((icon) => (
-            <IconCard key={icon.id} icon={icon} layout={layout} kind={iconKind} />
+            <IconCard
+              key={icon.id}
+              icon={icon}
+              isSelected={selectedIds.includes(icon.id)}
+              kind={iconKind}
+              layout={layout}
+              onToggle={() => onToggleIcon(icon.id)}
+            />
           ))
         ) : (
           <EmptyState
@@ -207,7 +361,12 @@ type SectionHeaderProps = {
   description: string;
   actionLabel: string;
   selectedCount: number;
+  totalCount: number;
+  isDeleting: boolean;
   onAdd: () => void;
+  onClearSelection: () => void;
+  onDeleteSelected: () => void;
+  onSelectAll: () => void;
 };
 
 function SectionHeader({
@@ -215,9 +374,39 @@ function SectionHeader({
   description,
   actionLabel,
   selectedCount,
+  totalCount,
+  isDeleting,
   onAdd,
+  onClearSelection,
+  onDeleteSelected,
+  onSelectAll,
 }: SectionHeaderProps) {
   const hasSelection = selectedCount > 0;
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const isAllSelected = totalCount > 0 && selectedCount === totalCount;
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: globalThis.PointerEvent) {
+      if (
+        menuRef.current &&
+        event.target instanceof Node &&
+        !menuRef.current.contains(event.target)
+      ) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isMenuOpen]);
 
   return (
     <div className="space-y-4">
@@ -231,7 +420,6 @@ function SectionHeader({
           </p>
         </div>
         <Button size="sm" type="button" onClick={onAdd}>
-          <Plus aria-hidden="true" />
           {actionLabel}
         </Button>
       </div>
@@ -242,13 +430,17 @@ function SectionHeader({
             <span className="rounded-full bg-[#EBF2FF] px-3 py-1 text-xs font-semibold tracking-[0.25px] text-[#124199]">
               {selectedCount}개 선택됨
             </span>
-            <Button size="sm" variant="ghost" type="button">
-              <X aria-hidden="true" />
+            <Button size="sm" variant="ghost" type="button" onClick={onClearSelection}>
               선택 해제
             </Button>
-            <Button size="sm" variant="destructive" type="button">
-              <Trash2 aria-hidden="true" />
-              삭제
+            <Button
+              disabled={isDeleting}
+              size="sm"
+              variant="destructive"
+              type="button"
+              onClick={onDeleteSelected}
+            >
+              {isDeleting ? "삭제 중..." : "삭제"}
             </Button>
           </div>
         ) : (
@@ -257,14 +449,37 @@ function SectionHeader({
           </p>
         )}
 
-        <Button
-          aria-label={`${title} 더보기`}
-          size="icon-sm"
-          type="button"
-          variant="ghost"
-        >
-          <MoreHorizontal aria-hidden="true" />
-        </Button>
+        <div ref={menuRef} className="relative">
+          <Button
+            aria-expanded={isMenuOpen}
+            aria-haspopup="menu"
+            size="sm"
+            type="button"
+            variant="ghost"
+            onClick={() => setIsMenuOpen((current) => !current)}
+          >
+            더보기
+          </Button>
+          {isMenuOpen ? (
+            <div
+              className="absolute right-0 top-9 z-20 w-36 rounded-[10px] border border-[#D9DCE3] bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+              role="menu"
+            >
+              <button
+                className="flex w-full cursor-pointer items-center rounded-[8px] px-3 py-2 text-left text-sm font-medium text-[#111620] hover:bg-[#EBF2FF] disabled:cursor-not-allowed disabled:text-[#9AA3B5] disabled:hover:bg-transparent"
+                disabled={totalCount === 0 || isAllSelected}
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  onSelectAll();
+                  setIsMenuOpen(false);
+                }}
+              >
+                {isAllSelected ? "전체 선택됨" : "전체 선택"}
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -272,13 +487,14 @@ function SectionHeader({
 
 type IconCardProps = {
   icon: WorkspaceIcon;
+  isSelected: boolean;
   layout: "list" | "grid";
   kind: "icon" | "text";
+  onToggle: () => void;
 };
 
-function IconCard({ icon, layout, kind }: IconCardProps) {
+function IconCard({ icon, isSelected, layout, kind, onToggle }: IconCardProps) {
   const isList = layout === "list";
-  const isSelected = false;
   const isText = kind === "text";
   const cardStyle =
     isText
@@ -286,11 +502,11 @@ function IconCard({ icon, layout, kind }: IconCardProps) {
       : undefined;
   const cardClassName = isText
     ? isSelected
-      ? "group flex h-[88px] shrink-0 items-center justify-center rounded-[12px] border-2 border-[#1E6FFF] bg-[#EBF2FF] p-3 transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
-      : "group flex h-[88px] shrink-0 items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-3 transition hover:border-[#99BFFF] hover:bg-[#EBF2FF] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
+      ? "group relative flex h-[88px] shrink-0 cursor-pointer items-center justify-center rounded-[12px] border-2 border-[#1E6FFF] bg-[#EBF2FF] p-3 transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
+      : "group relative flex h-[88px] shrink-0 cursor-pointer items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-3 transition hover:border-[#99BFFF] hover:bg-[#EBF2FF] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
     : isSelected
-      ? "group flex aspect-square w-full items-center justify-center rounded-[12px] border-2 border-[#1E6FFF] bg-[#EBF2FF] p-3 transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
-      : "group flex aspect-square w-full items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-3 transition hover:border-[#99BFFF] hover:bg-[#EBF2FF] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20";
+      ? "group relative flex aspect-square w-full cursor-pointer items-center justify-center rounded-[12px] border-2 border-[#1E6FFF] bg-[#EBF2FF] p-3 transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
+      : "group relative flex aspect-square w-full cursor-pointer items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-3 transition hover:border-[#99BFFF] hover:bg-[#EBF2FF] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20";
 
   return (
     <IconTooltip content={icon.name} fullWidth={!isText}>
@@ -300,6 +516,7 @@ function IconCard({ icon, layout, kind }: IconCardProps) {
         className={cardClassName}
         style={cardStyle}
         type="button"
+        onClick={onToggle}
       >
         <IconPreview icon={icon} kind={kind} compact={isList} />
       </button>
@@ -408,7 +625,7 @@ function EmptyState({ title, description, kind }: EmptyStateProps) {
         {kind === "text" ? (
           <Type aria-hidden="true" className="size-5" />
         ) : (
-          <Plus aria-hidden="true" className="size-5" />
+          <Settings2 aria-hidden="true" className="size-5" />
         )}
       </div>
       <h3 className="mt-4 text-sm font-semibold leading-5 text-[#111620]">
@@ -417,6 +634,77 @@ function EmptyState({ title, description, kind }: EmptyStateProps) {
       <p className="mt-2 max-w-56 text-sm leading-5 text-[#545D70]">
         {description}
       </p>
+    </div>
+  );
+}
+
+type DeleteConfirmDialogProps = {
+  title: string;
+  selectedCount: number;
+  isDeleting: boolean;
+  errorMessage: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function DeleteConfirmDialog({
+  title,
+  selectedCount,
+  isDeleting,
+  errorMessage,
+  onCancel,
+  onConfirm,
+}: DeleteConfirmDialogProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111620]/40 px-6">
+      <section
+        aria-labelledby="delete-confirm-title"
+        aria-modal="true"
+        className="w-full max-w-md rounded-[16px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.10)]"
+        role="dialog"
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#FEF2F2] text-[#EF4444]">
+            <Trash2 aria-hidden="true" className="size-5" />
+          </div>
+          <div className="min-w-0">
+            <h2
+              className="text-xl font-semibold leading-7 text-[#111620]"
+              id="delete-confirm-title"
+            >
+              선택한 {title} 삭제
+            </h2>
+            <p className="mt-2 text-sm leading-5 text-[#545D70]">
+              선택한 {selectedCount}개 항목을 삭제합니다. 삭제한 SVG 리소스는 되돌릴 수 없습니다.
+            </p>
+          </div>
+        </div>
+
+        {errorMessage ? (
+          <p className="mt-4 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+            {errorMessage}
+          </p>
+        ) : null}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button
+            disabled={isDeleting}
+            type="button"
+            variant="ghost"
+            onClick={onCancel}
+          >
+            취소
+          </Button>
+          <Button
+            disabled={isDeleting}
+            type="button"
+            variant="destructive"
+            onClick={onConfirm}
+          >
+            {isDeleting ? "삭제 중..." : "삭제"}
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -644,8 +932,8 @@ function UploadDialog({
               SVG 파일만 업로드할 수 있으며 최대 256KB까지 허용됩니다.
             </p>
           </div>
-          <Button aria-label="업로드 닫기" size="icon-sm" type="button" variant="ghost" onClick={onClose}>
-            <X aria-hidden="true" />
+          <Button size="sm" type="button" variant="ghost" onClick={onClose}>
+            닫기
           </Button>
         </div>
 
@@ -811,8 +1099,8 @@ function PropertiesPanel() {
             색상, 두께, 크기를 조정할 수 있습니다.
           </p>
         </div>
-        <Button size="icon-sm" type="button" variant="ghost" aria-label="초기화">
-          <RotateCcw aria-hidden="true" />
+        <Button size="sm" type="button" variant="ghost" aria-label="초기화">
+          초기화
         </Button>
       </div>
 
@@ -876,7 +1164,6 @@ function PropertiesPanel() {
 
       <div className="mt-auto pt-6">
         <Button className="w-full" size="lg" type="button">
-          <Download aria-hidden="true" />
           다운로드 준비 중
         </Button>
       </div>
