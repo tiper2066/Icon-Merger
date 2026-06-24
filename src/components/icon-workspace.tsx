@@ -2,11 +2,14 @@
 
 import {
   ChevronDown,
+  Download,
   Palette,
+  RotateCcw,
   Settings2,
   Trash2,
   Type,
   UploadCloud,
+  MoreVertical,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -23,6 +26,7 @@ import {
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Button } from "@/components/ui/button";
+import { IconButtonTooltip } from "@/components/ui/icon-button-tooltip";
 import { IconType } from "@/generated/prisma/enums";
 import {
   mergeSvgsByAnchor,
@@ -42,8 +46,23 @@ const iconColorOptions = [
   { label: "10번 색상", value: "#FFFFFF" },
 ];
 
+const defaultIconProperties = {
+  color: "#000000",
+  strokeWidth: 1,
+  size: 24,
+  format: "svg" as DownloadFormat,
+};
+
+const strokeWidthOptions = [0.5, 1, 1.5, 2, 2.5, 3];
+const downloadFormatOptions = [
+  { label: "SVG", value: "svg" },
+  { label: "PNG", value: "png" },
+  { label: "JPG", value: "jpg" },
+] satisfies Array<{ label: string; value: DownloadFormat }>;
+
 type IconTypeValue = (typeof IconType)[keyof typeof IconType];
 type UploadType = typeof IconType.MAIN | typeof IconType.MERGE_ICON | typeof IconType.MERGE_TEXT;
+type DownloadFormat = "svg" | "png" | "jpg";
 
 export type WorkspaceIcon = {
   id: string;
@@ -382,18 +401,18 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
             onToggleIcon={(iconId) => toggleIconSelection(IconType.MERGE_ICON, iconId)}
           />
           <ResourceSection
-            title="텍스트 SVG"
+            title="병합용 텍스트"
             description="문자나 라벨 형태의 SVG 리소스입니다."
             actionLabel="텍스트 추가"
-            emptyTitle="텍스트 SVG가 없습니다"
-            emptyDescription="텍스트 SVG를 업로드하면 별도 섹션으로 관리됩니다."
+            emptyTitle="병합용 텍스트가 없습니다"
+            emptyDescription="병합용 텍스트를 업로드하면 별도 섹션으로 관리됩니다."
             icons={mergeTexts}
             iconKind="text"
             selectedIds={selectedIconIds[IconType.MERGE_TEXT]}
             isDeleting={deletingType === IconType.MERGE_TEXT}
             onAdd={() => setUploadType(IconType.MERGE_TEXT)}
             onClearSelection={() => clearIconSelection(IconType.MERGE_TEXT)}
-            onDeleteSelected={() => requestDeleteSelected(IconType.MERGE_TEXT, "텍스트 SVG")}
+            onDeleteSelected={() => requestDeleteSelected(IconType.MERGE_TEXT, "병합용 텍스트")}
             onSelectAll={() => selectAllIcons(IconType.MERGE_TEXT, mergeTexts)}
             onToggleIcon={(iconId) => toggleIconSelection(IconType.MERGE_TEXT, iconId)}
           />
@@ -489,7 +508,7 @@ function IconPanel({
             ? "mt-5 grid grid-cols-2 gap-3 overflow-y-auto"
             : iconKind === "text"
               ? "mt-5 flex flex-wrap items-start gap-4 overflow-y-auto"
-              : "mt-5 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-4 overflow-y-auto"
+              : "mt-5 grid grid-cols-[repeat(auto-fill,64px)] gap-3 overflow-y-auto"
         }
       >
         {icons.length > 0 ? (
@@ -614,14 +633,16 @@ function SectionHeader({
 
         <div ref={menuRef} className="relative">
           <Button
+            aria-label="더보기"
             aria-expanded={isMenuOpen}
             aria-haspopup="menu"
-            size="sm"
+            className="border-[#D9DCE3] bg-white text-[#111620] hover:bg-[#F7F8FA]"
+            size="icon-lg"
             type="button"
             variant="ghost"
             onClick={() => setIsMenuOpen((current) => !current)}
           >
-            더보기
+            <MoreVertical aria-hidden="true" className="size-4" />
           </Button>
           {isMenuOpen ? (
             <div
@@ -1135,14 +1156,17 @@ function UploadDialog({
 
         {files.length > 0 ? (
           <div className="mt-4 rounded-[12px] border border-[#ECEEF2] bg-[#F7F8FA] p-3">
-            <p className="text-xs font-semibold tracking-[0.25px] text-[#545D70]">
-              선택된 파일
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold tracking-[0.25px] text-[#545D70]">
+                선택된 파일
+              </p>
+              <span className="rounded-full bg-[#EBF2FF] px-2 py-0.5 text-xs font-semibold text-[#124199]">
+                {files.length}개
+              </span>
+            </div>
+            <p className="mt-2 overflow-x-auto whitespace-nowrap text-sm leading-5 text-[#111620]">
+              {files.map((file) => file.name).join(", ")}
             </p>
-            <ul className="mt-2 space-y-1 text-sm text-[#111620]">
-              {files.map((file) => (
-                <li key={`${file.name}-${file.size}`}>{file.name}</li>
-              ))}
-            </ul>
           </div>
         ) : null}
 
@@ -1265,11 +1289,92 @@ function PropertiesPanel({
   selectedMainCount,
   selectedResourceCount,
 }: PropertiesPanelProps) {
+  const [selectedColor, setSelectedColor] = useState(defaultIconProperties.color);
+  const [strokeWidth, setStrokeWidth] = useState(defaultIconProperties.strokeWidth);
+  const [outputSize, setOutputSize] = useState(defaultIconProperties.size);
+  const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>(
+    defaultIconProperties.format,
+  );
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const isMissingSelection = !mainIcon || !resourceIcon;
-  const isMissingAnchor =
-    Boolean(mainIcon && resourceIcon) && !mergedPreview;
+  const isMissingAnchor = Boolean(mainIcon && resourceIcon) && !mergedPreview;
   const hasMultiplePreviewCandidates =
     selectedMainCount > 1 || selectedResourceCount > 1;
+  const resourceKind = resourceIcon?.type === IconType.MERGE_TEXT ? "text" : "icon";
+  const previewDisplaySize = clamp(outputSize, 16, 56);
+  const previewMergedSvg = useMemo(() => {
+    if (!mergedPreview) {
+      return null;
+    }
+
+    return applySvgProperties(mergedPreview, {
+      color: selectedColor,
+      outputHeight: previewDisplaySize,
+      resourceKind,
+      strokeWidth,
+    });
+  }, [mergedPreview, previewDisplaySize, resourceKind, selectedColor, strokeWidth]);
+  const downloadMergedSvg = useMemo(() => {
+    if (!mergedPreview) {
+      return null;
+    }
+
+    return applySvgProperties(mergedPreview, {
+      color: selectedColor,
+      outputHeight: outputSize,
+      resourceKind,
+      strokeWidth,
+    });
+  }, [mergedPreview, outputSize, resourceKind, selectedColor, strokeWidth]);
+  const canDownload = Boolean(downloadMergedSvg && mainIcon && resourceIcon);
+
+  function resetProperties() {
+    setSelectedColor(defaultIconProperties.color);
+    setStrokeWidth(defaultIconProperties.strokeWidth);
+    setOutputSize(defaultIconProperties.size);
+    setDownloadFormat(defaultIconProperties.format);
+    setDownloadError(null);
+  }
+
+  async function handleDownload() {
+    if (!downloadMergedSvg || !mainIcon || !resourceIcon) {
+      return;
+    }
+
+    setIsDownloading(true);
+    setDownloadError(null);
+
+    try {
+      const filename = createMergedFilename({
+        format: downloadFormat,
+        mainName: mainIcon.name,
+        resourceName: resourceIcon.name,
+        size: outputSize,
+      });
+
+      if (downloadFormat === "svg") {
+        downloadBlob(
+          new Blob([downloadMergedSvg.svgContent], { type: "image/svg+xml;charset=utf-8" }),
+          filename,
+        );
+        return;
+      }
+
+      const blob = await renderSvgToRasterBlob({
+        format: downloadFormat,
+        height: downloadMergedSvg.height,
+        svgContent: downloadMergedSvg.svgContent,
+        width: downloadMergedSvg.width,
+      });
+
+      downloadBlob(blob, filename);
+    } catch {
+      setDownloadError("다운로드 파일을 만드는 중 오류가 발생했습니다. 다시 시도해 주세요.");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
 
   return (
     <aside className="flex min-h-0 flex-col rounded-[16px] border border-[#ECEEF2] bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
@@ -1282,9 +1387,18 @@ function PropertiesPanel({
             색상, 두께, 크기를 조정할 수 있습니다.
           </p>
         </div>
-        <Button size="sm" type="button" variant="ghost" aria-label="초기화">
-          초기화
-        </Button>
+        <IconButtonTooltip label="초기화">
+          <Button
+            aria-label="초기화"
+            className="border-[#D9DCE3] bg-white text-[#111620] hover:bg-[#F7F8FA]"
+            size="icon"
+            type="button"
+            variant="ghost"
+            onClick={resetProperties}
+          >
+            <RotateCcw aria-hidden="true" className="size-4" />
+          </Button>
+        </IconButtonTooltip>
       </div>
 
       <div className="mt-6 rounded-[12px] border border-[#ECEEF2] bg-[#F7F8FA] p-4">
@@ -1318,22 +1432,25 @@ function PropertiesPanel({
           <span className="text-sm font-semibold text-[#747E93]">=</span>
           <PreviewTile
             active
-            icon={mergedPreview}
+            activeSurface={selectedColor === "#FFFFFF" ? "dark" : "light"}
+            displaySizePx={previewDisplaySize}
+            icon={previewMergedSvg}
             kind={resourceIcon?.type === IconType.MERGE_TEXT ? "merged-text" : "merged-icon"}
             label="결과"
           />
         </div>
         {isMissingSelection ? (
           <p className="mt-4 text-center text-xs leading-4 text-[#747E93]">
-            메인 아이콘 1개와 병합용 아이콘 또는 텍스트 SVG 1개를 선택하면 병합 결과가 표시됩니다.
+            메인 아이콘 1개와 병합용 아이콘 또는 병합용 텍스트 1개를 선택하면 병합 결과가 표시됩니다.
           </p>
         ) : isMissingAnchor ? (
           <p className="mt-4 text-center text-xs leading-4 text-[#B91C1C]">
             선택한 메인 아이콘에 anchor 좌표가 없어 병합 미리보기를 만들 수 없습니다.
           </p>
-        ) : mergedPreview ? (
+        ) : downloadMergedSvg ? (
           <p className="mt-4 text-center text-xs leading-4 text-[#545D70]">
-            결과 크기 {formatDimension(mergedPreview.width)} x {formatDimension(mergedPreview.height)}
+            다운로드 크기 {formatDimension(downloadMergedSvg.width)} x{" "}
+            {formatDimension(downloadMergedSvg.height)}
           </p>
         ) : null}
       </div>
@@ -1346,16 +1463,24 @@ function PropertiesPanel({
         >
           <div className="grid grid-cols-5 gap-2">
             {iconColorOptions.map((color) => (
-              <span
+              <button
                 key={color.value}
                 aria-label={`${color.label} ${color.value}`}
-                className="size-8 rounded-[8px] border border-[#D9DCE3]"
-                role="img"
+                aria-pressed={selectedColor === color.value}
+                className={
+                  selectedColor === color.value
+                    ? "size-8 cursor-pointer rounded-[8px] border-2 border-[#1E6FFF] ring-2 ring-[#1E6FFF]/20"
+                    : "size-8 cursor-pointer rounded-[8px] border border-[#D9DCE3] hover:border-[#99BFFF]"
+                }
                 style={{
                   backgroundColor: color.value,
                   borderColor:
-                    color.value === "#FFFFFF" ? "#E5E7EB" : undefined,
+                    color.value === "#FFFFFF" && selectedColor !== color.value
+                      ? "#E5E7EB"
+                      : undefined,
                 }}
+                type="button"
+                onClick={() => setSelectedColor(color.value)}
               />
             ))}
           </div>
@@ -1364,31 +1489,92 @@ function PropertiesPanel({
         <PropertyGroup
           icon={<Settings2 aria-hidden="true" className="size-4" />}
           title="선 두께"
-          description="0.5px 단위 조정은 후속 단계에서 연결합니다."
+          description={`${strokeWidth}px, 0.5px 단위로 조정합니다.`}
         >
-          <div className="h-2 rounded-full bg-[#ECEEF2]">
-            <div className="h-2 w-1/3 rounded-full bg-[#1E6FFF]" />
-          </div>
+          <input
+            aria-label="선 두께"
+            className="h-2 w-full cursor-pointer accent-[#1E6FFF]"
+            max="3"
+            min="0.5"
+            step="0.5"
+            type="range"
+            value={strokeWidth}
+            onChange={(event) => setStrokeWidth(Number(event.target.value))}
+          />
           <div className="mt-2 flex justify-between text-xs text-[#747E93]">
-            <span>0.5</span>
-            <span>3</span>
+            {strokeWidthOptions.map((value) => (
+              <span key={value}>{value}</span>
+            ))}
           </div>
         </PropertyGroup>
 
         <PropertyGroup
           icon={<ChevronDown aria-hidden="true" className="size-4" />}
           title="크기"
-          description="다운로드 높이 기준 크기입니다."
+          description={`다운로드 높이 기준 ${outputSize}px입니다.`}
         >
-          <div className="rounded-[8px] border border-[#D9DCE3] bg-white px-3 py-2 text-sm font-medium text-[#111620]">
-            64px
+          <input
+            aria-label="다운로드 크기"
+            className="h-2 w-full cursor-pointer accent-[#1E6FFF]"
+            max="256"
+            min="16"
+            step="4"
+            type="range"
+            value={outputSize}
+            onChange={(event) => setOutputSize(Number(event.target.value))}
+          />
+          <div className="mt-2 flex justify-between text-xs text-[#747E93]">
+            <span>16px</span>
+            <span>{outputSize}px</span>
+            <span>256px</span>
+          </div>
+          <p className="mt-2 text-xs leading-4 text-[#747E93]">
+            목록에서 보이는 아이콘의 크기는 최대 56px입니다.
+          </p>
+        </PropertyGroup>
+
+        <PropertyGroup
+          icon={<Download aria-hidden="true" className="size-4" />}
+          title="다운로드 포맷"
+          description="SVG, PNG, JPG 중 하나를 선택합니다."
+        >
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="다운로드 포맷">
+            {downloadFormatOptions.map((format) => (
+              <button
+                key={format.value}
+                aria-pressed={downloadFormat === format.value}
+                className={
+                  downloadFormat === format.value
+                    ? "h-10 cursor-pointer rounded-[8px] border border-[#1E6FFF] bg-[#EBF2FF] text-sm font-semibold text-[#124199]"
+                    : "h-10 cursor-pointer rounded-[8px] border border-[#D9DCE3] bg-white text-sm font-medium text-[#545D70] hover:border-[#99BFFF]"
+                }
+                type="button"
+                onClick={() => {
+                  setDownloadFormat(format.value);
+                  setDownloadError(null);
+                }}
+              >
+                {format.label}
+              </button>
+            ))}
           </div>
         </PropertyGroup>
       </div>
 
       <div className="mt-auto pt-6">
-        <Button className="w-full" size="lg" type="button">
-          다운로드 준비 중
+        {downloadError ? (
+          <p className="mb-3 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+            {downloadError}
+          </p>
+        ) : null}
+        <Button
+          className="w-full"
+          disabled={!canDownload || isDownloading}
+          size="lg"
+          type="button"
+          onClick={handleDownload}
+        >
+          {isDownloading ? "다운로드 준비 중..." : "다운로드"}
         </Button>
       </div>
     </aside>
@@ -1400,6 +1586,8 @@ type PreviewTileProps = {
   icon?: (Pick<WorkspaceIcon, "svgContent"> | MergedSvgResult) | null;
   kind?: "icon" | "text" | "merged-icon" | "merged-text";
   active?: boolean;
+  activeSurface?: "light" | "dark";
+  displaySizePx?: number;
 };
 
 function PreviewTile({
@@ -1407,14 +1595,20 @@ function PreviewTile({
   icon = null,
   kind = "icon",
   active = false,
+  activeSurface = "light",
+  displaySizePx,
 }: PreviewTileProps) {
-  const previewClassName = getPreviewSvgClassName(kind);
+  const previewClassName = getPreviewSvgClassName(kind, Boolean(displaySizePx));
+  const activeClassName =
+    activeSurface === "dark"
+      ? "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-[#111620] p-2 text-xs font-semibold text-white"
+      : "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-white p-2 text-xs font-semibold text-[#124199]";
 
   return (
     <div
       className={
         active
-          ? "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-[#EBF2FF] p-2 text-xs font-semibold text-[#124199]"
+          ? activeClassName
           : "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-2 text-xs font-medium text-[#747E93]"
       }
     >
@@ -1424,6 +1618,14 @@ function PreviewTile({
           className={previewClassName}
           dangerouslySetInnerHTML={{ __html: icon.svgContent }}
           role="img"
+          style={
+            displaySizePx
+              ? {
+                  height: `${displaySizePx}px`,
+                  width: `${displaySizePx}px`,
+                }
+              : undefined
+          }
         />
       ) : (
         label
@@ -1432,22 +1634,253 @@ function PreviewTile({
   );
 }
 
-function getPreviewSvgClassName(kind: NonNullable<PreviewTileProps["kind"]>) {
+function getPreviewSvgClassName(
+  kind: NonNullable<PreviewTileProps["kind"]>,
+  hasDisplaySize = false,
+) {
   const baseClassName = "flex size-full items-center justify-center text-[#111620]";
+  const customSizeClass = hasDisplaySize
+    ? "[&_svg]:h-full [&_svg]:w-full"
+    : "[&_svg]:h-8 [&_svg]:w-8";
 
   if (kind === "text") {
     return `${baseClassName} [&_svg]:h-8 [&_svg]:w-auto [&_svg]:max-w-full`;
   }
 
   if (kind === "merged-text") {
-    return `${baseClassName} svg-merged-text-preview [&_svg]:h-8 [&_svg]:w-8`;
+    return `${baseClassName} svg-merged-text-preview ${customSizeClass}`;
   }
 
   if (kind === "merged-icon") {
-    return `${baseClassName} svg-merged-icon-preview [&_svg]:h-8 [&_svg]:w-8`;
+    return `${baseClassName} svg-merged-icon-preview ${customSizeClass}`;
   }
 
   return `${baseClassName} svg-line-preview [&_svg]:h-8 [&_svg]:w-8`;
+}
+
+function applySvgProperties(
+  mergedSvg: MergedSvgResult,
+  options: {
+    color: string;
+    outputHeight: number;
+    resourceKind: "icon" | "text";
+    strokeWidth: number;
+  },
+) {
+  const outputWidth = scaleWidthFromHeight(
+    mergedSvg.width,
+    mergedSvg.height,
+    options.outputHeight,
+  );
+  const openingTag = mergedSvg.svgContent.match(/^<svg\b[^>]*>/i)?.[0];
+
+  if (!openingTag) {
+    return {
+      ...mergedSvg,
+      height: options.outputHeight,
+      width: outputWidth,
+    };
+  }
+
+  const propertyStyle = createSvgPropertyStyle(options);
+  const scaledStrokeWidth = scaleStrokeWidth({
+    outputHeight: options.outputHeight,
+    sourceHeight: mergedSvg.height,
+    strokeWidth: options.strokeWidth,
+  });
+  const withoutExistingPropertyStyle = mergedSvg.svgContent.replace(
+    /<style data-icon-merger-properties="true">[\s\S]*?<\/style>/i,
+    "",
+  );
+  const withSizedRoot = setSvgRootAttributes(withoutExistingPropertyStyle, {
+    height: formatDimension(outputSizeToNumber(options.outputHeight)),
+    width: formatDimension(outputSizeToNumber(outputWidth)),
+  });
+  const svgContent = withSizedRoot.replace(
+    /^<svg\b[^>]*>/i,
+    (tag) => `${tag}${propertyStyle(scaledStrokeWidth)}`,
+  );
+
+  return {
+    ...mergedSvg,
+    height: options.outputHeight,
+    svgContent,
+    width: outputWidth,
+  } satisfies MergedSvgResult;
+}
+
+function createSvgPropertyStyle(options: {
+  color: string;
+  resourceKind: "icon" | "text";
+}) {
+  const lineLayerRules = [
+    'svg [data-layer="main"] *',
+    options.resourceKind === "icon" ? 'svg [data-layer="merge"] *' : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return (scaledStrokeWidth: number) => {
+    const strokeRule = `stroke-width: ${formatDimension(scaledStrokeWidth)} !important;`;
+    const textLayerRules =
+      options.resourceKind === "text"
+        ? `svg [data-layer="merge"] * { fill: ${options.color} !important; stroke: ${options.color} !important; ${strokeRule} }`
+        : "";
+
+    return [
+      '<style data-icon-merger-properties="true">',
+      `${lineLayerRules} { fill: none !important; stroke: ${options.color} !important; ${strokeRule} }`,
+      textLayerRules,
+      "</style>",
+    ].join("");
+  };
+}
+
+function setSvgRootAttributes(svgContent: string, attributes: Record<string, string>) {
+  return svgContent.replace(/^<svg\b[^>]*>/i, (tag) => {
+    let nextTag = tag;
+
+    Object.entries(attributes).forEach(([name, value]) => {
+      const attributePattern = new RegExp(`\\s${name}=["'][^"']*["']`, "i");
+
+      nextTag = attributePattern.test(nextTag)
+        ? nextTag.replace(attributePattern, ` ${name}="${value}"`)
+        : nextTag.replace(/>$/, ` ${name}="${value}">`);
+    });
+
+    return nextTag;
+  });
+}
+
+function scaleWidthFromHeight(width: number, height: number, outputHeight: number) {
+  if (height <= 0) {
+    return outputHeight;
+  }
+
+  return Number(((width / height) * outputHeight).toFixed(3));
+}
+
+function scaleStrokeWidth({
+  outputHeight,
+  sourceHeight,
+  strokeWidth,
+}: {
+  outputHeight: number;
+  sourceHeight: number;
+  strokeWidth: number;
+}) {
+  if (outputHeight <= 0 || sourceHeight <= 0) {
+    return strokeWidth;
+  }
+
+  return (strokeWidth * sourceHeight) / outputHeight;
+}
+
+function outputSizeToNumber(value: number) {
+  return Number(value.toFixed(3));
+}
+
+function createMergedFilename({
+  format,
+  mainName,
+  resourceName,
+  size,
+}: {
+  format: DownloadFormat;
+  mainName: string;
+  resourceName: string;
+  size: number;
+}) {
+  return `icon-merged-${slugifyFilenamePart(mainName)}-${slugifyFilenamePart(resourceName)}-${size}px.${format}`;
+}
+
+function slugifyFilenamePart(value: string) {
+  const slug = value
+    .replace(/\.[a-z0-9]+$/i, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return slug || "icon";
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function renderSvgToRasterBlob({
+  format,
+  height,
+  svgContent,
+  width,
+}: {
+  format: Exclude<DownloadFormat, "svg">;
+  height: number;
+  svgContent: string;
+  width: number;
+}) {
+  const image = await loadSvgImage(svgContent);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  const canvasWidth = Math.max(Math.ceil(width), 1);
+  const canvasHeight = Math.max(Math.ceil(height), 1);
+
+  if (!context) {
+    throw new Error("Canvas context is not available.");
+  }
+
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+
+  if (format === "jpg") {
+    context.fillStyle = "#FFFFFF";
+    context.fillRect(0, 0, canvasWidth, canvasHeight);
+  }
+
+  context.drawImage(image, 0, 0, canvasWidth, canvasHeight);
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+
+        reject(new Error("Canvas conversion failed."));
+      },
+      format === "png" ? "image/png" : "image/jpeg",
+      0.92,
+    );
+  });
+}
+
+function loadSvgImage(svgContent: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const blob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("SVG image loading failed."));
+    };
+    image.src = url;
+  });
 }
 
 type PropertyGroupProps = {
@@ -1489,8 +1922,8 @@ function getUploadCopy(type: UploadType) {
 
   if (type === IconType.MERGE_TEXT) {
     return {
-      title: "텍스트 SVG 업로드",
-      policy: "텍스트 SVG는 여러 개를 한 번에 선택할 수 있습니다.",
+      title: "병합용 텍스트 업로드",
+      policy: "병합용 텍스트는 여러 개를 한 번에 선택할 수 있습니다.",
     };
   }
 

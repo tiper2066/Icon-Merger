@@ -6,10 +6,10 @@
 
 ## 현재 상태
 
-- 1단계 초기화, 2단계 Google OAuth 접근 제어, 3단계 Prisma 데이터 모델과 아이콘 API, 4단계 메인 작업 화면 UI, 5단계 SVG 업로드, 6단계 아이콘 선택/삭제, 7단계 anchor 기반 병합 미리보기 구현을 완료했다.
+- 1단계 초기화, 2단계 Google OAuth 접근 제어, 3단계 Prisma 데이터 모델과 아이콘 API, 4단계 메인 작업 화면 UI, 5단계 SVG 업로드, 6단계 아이콘 선택/삭제, 7단계 anchor 기반 병합 미리보기, 8단계 속성 패널, 9단계 SVG/PNG/JPG 다운로드 구현을 완료했다.
 - 로컬 환경 변수 설정 후 허용 이메일 Google 계정으로 로그인 테스트를 완료했다.
 - Next.js App Router, TypeScript, Tailwind CSS, Shadcn UI, Prisma, Supabase Postgres 중심 DB 설정이 적용되어 있다.
-- `docs/development-plan.md`의 21번 체크리스트에서 1, 2, 3, 4, 5, 6, 7단계가 완료 처리되어 있다.
+- `docs/development-plan.md`의 21번 체크리스트에서 1, 2, 3, 4, 5, 6, 7, 8, 9단계가 완료 처리되어 있다.
 - 초기화 작업은 `main` 브랜치에 커밋 및 원격 푸시 완료 상태다.
   - 커밋: `ac06308 Initialize Next.js project foundation`
   - 원격: `https://github.com/tiper2066/Icon-Merger.git`
@@ -41,6 +41,9 @@
 - 인증: Google OAuth
 - 로그인 제한: 허용된 Google 이메일 계정만 접근 가능
 - 허용 이메일 목록은 `ALLOWED_GOOGLE_EMAILS` 환경 변수에 쉼표 구분으로 설정한다.
+- 다음 구현 계획에서는 `ADMIN_GOOGLE_EMAILS`를 추가해 로그인 허용 사용자와 관리자를 분리한다.
+- 관리자 이메일은 회사 도메인으로 제한하지 않고 Gmail 등 외부 Google 계정도 사용할 수 있다.
+- 일반 사용자는 공용 아이콘 라이브러리를 조회해 병합/다운로드만 수행하고, 관리자는 아이콘 업로드/삭제를 담당한다.
 - NextAuth 설정은 `src/lib/auth/options.ts`, OAuth Route Handler는 `src/app/api/auth/[...nextauth]/route.ts`, 보호 라우팅은 Next.js 16 `src/proxy.ts`에 있다.
 - 로그인 UI는 `src/app/auth/signin/page.tsx`, 로그인/로그아웃 버튼은 `src/components/auth/`에 있다.
 - Google OAuth callback URL은 로컬 기준 `http://localhost:3000/api/auth/callback/google`이다.
@@ -53,9 +56,11 @@
 - `IconType`은 `MAIN`, `MERGE_ICON`, `MERGE_TEXT`이다.
 - `Icon`은 `svgContent`, `viewBox`, `width`, `height`, 선택적 `baseWidth`, `baseHeight`, `anchorX`, `anchorY`를 가진다.
 - 사용자별 타입 조회를 위해 `Icon_userId_type_createdAt_idx` 인덱스를 사용한다.
+- 다음 구현 계획에서는 아이콘을 관리자 개인 리소스가 아니라 앱 공용 라이브러리로 조회하도록 전환한다.
+- `Icon.userId`는 업로드한 관리자 추적 용도로 유지할 수 있고, 조회는 공용 라이브러리 기준으로 수행한다.
 - 적용된 migration: `prisma/migrations/20260623230122_add_icon_models/migration.sql`
 - 아이콘 API는 `GET /api/icons`, `POST /api/icons`, `DELETE /api/icons`, `DELETE /api/icons/[id]`까지 구현되어 있다.
-- 예상 아이콘 수는 메인용과 병합용, 텍스트 SVG를 합쳐 최대 100개 내외다.
+- 예상 아이콘 수는 메인용, 병합용 아이콘, 병합용 텍스트를 합쳐 최대 100개 내외다.
 - Supabase Storage는 초기 범위에서 사용하지 않는다.
 - MinIO는 사내망 이전 후에도 당장 필수는 아니며, 대용량 파일, ZIP 결과물, SVG 외 원본 파일 저장이 필요해질 때 도입한다.
 
@@ -67,7 +72,7 @@
   - 우측: 속성 패널
 - 4단계에서 `src/app/page.tsx`는 실제 작업 화면으로 전환되었고, 서버에서 로그인 사용자 아이콘을 타입별로 조회해 표시한다.
 - 5단계에서 작업 화면 본문은 `src/components/icon-workspace.tsx` 클라이언트 컴포넌트로 분리되었고, 타입별 업로드 다이얼로그를 제공한다.
-- 병합용 리소스 영역은 `아이콘`과 `텍스트(svg)` 섹션으로 나눈다.
+- 병합용 리소스 영역은 `병합용 아이콘`과 `병합용 텍스트` 섹션으로 나눈다.
 - 각 섹션의 기본 헤더에는 `추가` 버튼과 더보기 메뉴만 표시한다.
 - 항목이 선택되면 `N개 선택됨`, `선택 해제`, `삭제` 액션을 표시한다.
 - `전체 선택`은 항상 노출하지 않고 더보기 메뉴 안에 배치한다.
@@ -75,14 +80,15 @@
 - 아이콘 이름은 hover/focus 시 삼각형이 있는 tooltip으로 표시한다.
 - 선택 상태는 카드 테두리의 Penta Primary 색상과 옅은 배경으로 표시한다.
 - 메인 아이콘과 병합용 아이콘은 동일한 아이콘 표시 크기를 사용한다.
-- 텍스트 SVG 카드는 높이를 고정하고 SVG 비율에 따라 너비를 조정한다.
+- 병합용 텍스트 카드는 높이를 고정하고 SVG 비율에 따라 너비를 조정한다.
 - Penta Design System을 UI 스타일 기준으로 사용한다.
 - Shadcn UI는 컴포넌트 구조와 접근성 기반으로 사용하고, 색상/폰트/간격/radius/shadow는 Penta 토큰에 맞춘다.
 - `src/app/globals.css`와 `src/components/ui/button.tsx`에 Penta 색상/버튼 스타일 기준이 반영되어 있다.
 - 앱 기본 폰트는 공식 `pretendard` 패키지의 Pretendard Variable을 사용한다.
 - 버튼은 기본적으로 아이콘 없이 텍스트만 표시하며, 텍스트 세로 정렬과 hover 커서를 공통 버튼 스타일에서 보정한다.
 - 헤더의 사용자 이름과 이메일은 한 줄로 표시하고, 로그아웃 버튼은 작은 버튼 크기 기준을 사용한다.
-- 실제 선택 상태 변경, 전체 선택, 삭제 확인, anchor 기반 병합 미리보기는 연결되었고, 속성 조정 동작은 아직 연결 전이다.
+- 실제 선택 상태 변경, 전체 선택, 삭제 확인, anchor 기반 병합 미리보기, 속성 조정, 다운로드 동작이 연결되어 있다.
+- 다음 구현 계획에서는 일반 사용자 화면에서 업로드, 삭제, 선택 해제, 전체 선택을 숨기고 메인 아이콘, 병합용 아이콘, 병합용 텍스트를 각각 하나씩만 선택하게 한다.
 
 ## 업로드 정책
 
@@ -103,7 +109,7 @@
 - 병합용 아이콘 업로드:
   - 여러 개를 한 번에 업로드할 수 있다.
   - 기준점 좌표는 입력하지 않는다.
-- 텍스트 SVG 업로드:
+- 병합용 텍스트 업로드:
   - 여러 개를 한 번에 업로드할 수 있다.
   - 기준점 좌표는 입력하지 않는다.
 
@@ -111,7 +117,7 @@
 
 - 병합은 anchor 기반 SVG 확장 병합으로 구현한다.
 - 메인 아이콘은 `anchorX`, `anchorY`를 가진다.
-- 병합용 아이콘 또는 텍스트 SVG의 좌측 상단을 메인 아이콘의 `anchorX`, `anchorY`에 맞춘다.
+- 병합용 아이콘 또는 병합용 텍스트의 좌측 상단을 메인 아이콘의 `anchorX`, `anchorY`에 맞춘다.
 - 최종 SVG 크기는 최초 메인 아이콘 크기를 유지하지 않고 전체 bounding box 기준으로 다시 계산한다.
 - 최종 `viewBox`는 `0 0 resultWidth resultHeight`로 설정한다.
 - `src/lib/svg/merge-svg.ts`가 SVG 루트 `viewBox`와 내부 콘텐츠를 분리하고, 결과 SVG 안에 `main`/`merge` 그룹을 배치한다.
@@ -130,7 +136,12 @@
   - 값 후보: `0.5`, `1`, `1.5`, `2`, `2.5`, `3`
 - 크기는 `16px`부터 `256px`까지 `4px` 간격으로 제공한다.
 - 병합 결과는 너비와 높이가 달라질 수 있으므로 크기 값은 다운로드 결과의 기준 높이로 해석한다.
+- 우측 결과 미리보기의 표시 크기는 크기 속성을 따라가되 최소 `16px`, 최대 `56px`로 제한한다.
 - PNG/JPG 다운로드 시 너비는 결과 SVG 비율에 맞춰 자동 계산한다.
+- 초기화 버튼은 선택 아이콘은 유지하고 색상, 선 두께, 크기, 포맷만 기본값으로 되돌린다.
+- 다운로드 파일명은 `icon-merged-{mainIconName}-{mergeIconName}-{size}px.{format}` 규칙을 사용한다.
+- SVG 다운로드는 Blob으로, PNG/JPG 다운로드는 Canvas `toBlob` 변환으로 처리한다.
+- JPG 다운로드는 흰색 배경을 적용한다.
 
 ## MVP 포함 범위
 
@@ -138,7 +149,7 @@
 - 특정 Google 이메일 허용
 - PostgreSQL DB 기반 SVG 원본 저장
 - 메인 아이콘 세로 목록
-- 병합용 아이콘과 텍스트 SVG 섹션
+- 병합용 아이콘과 병합용 텍스트 섹션
 - 메인 아이콘 기준점 좌표 입력
 - 선택, 더보기 메뉴 기반 전체 선택, 선택 해제, 삭제
 - anchor 기반 SVG 병합 미리보기
@@ -150,13 +161,16 @@
 
 `docs/development-plan.md`의 `21. 권장 개발 순서 요약` 체크리스트를 따라 진행한다.
 
-1. 속성 패널과 초기화 기능 구현
-2. SVG, PNG, JPG 다운로드 구현
-3. 테스트, 접근성, 반응형, 배포 설정 보강
+1. 사용자/관리자 역할 분리와 공용 아이콘 라이브러리 전환
+2. 테스트, 접근성, 반응형, 배포 설정 보강
 
 ## 최근 검증 결과
 
 - 허용 이메일 Google 계정으로 로컬 로그인 성공 확인
+- 8-9단계 후속 보정 후 `npm run lint` 성공
+- 8-9단계 후속 보정 후 `npm run build` 성공
+- 8-9단계 속성 패널과 다운로드 구현 후 `npm run lint` 성공
+- 8-9단계 속성 패널과 다운로드 구현 후 `npm run build` 성공
 - 7단계 병합 미리보기 구현 후 `npm run lint` 성공
 - 7단계 병합 미리보기 구현 후 `npm run build` 성공
 - 6단계 후속 UI 보정 후 `npm run lint` 성공
