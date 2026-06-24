@@ -2,6 +2,7 @@
 
 import {
   ChevronDown,
+  Crosshair,
   Download,
   Palette,
   RotateCcw,
@@ -79,12 +80,17 @@ type IconWorkspaceProps = {
   user: {
     name: string | null;
     email: string;
+    role: "admin" | "user";
   };
   icons: WorkspaceIcon[];
 };
 
 type SelectedIconIds = Record<IconTypeValue, string[]>;
 type ResourceIconType = typeof IconType.MERGE_ICON | typeof IconType.MERGE_TEXT;
+type MainIconAnchor = {
+  anchorX: number;
+  anchorY: number;
+};
 type RepresentativeSelection = {
   mainIconId: string | null;
   resourceIconId: string | null;
@@ -105,6 +111,7 @@ const emptyRepresentativeSelection: RepresentativeSelection = {
 
 export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
   const router = useRouter();
+  const canManageIcons = user.role === "admin";
   const [uploadType, setUploadType] = useState<UploadType | null>(null);
   const [selectedIconIds, setSelectedIconIds] = useState<SelectedIconIds>(
     emptySelectedIconIds,
@@ -115,6 +122,7 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
     type: IconTypeValue;
     title: string;
   } | null>(null);
+  const [anchorEditingIcon, setAnchorEditingIcon] = useState<WorkspaceIcon | null>(null);
   const [deletingType, setDeletingType] = useState<IconTypeValue | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const mainIcons = useMemo(
@@ -230,12 +238,25 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
 
     setSelectedIconIds((currentSelection) => {
       const selectedIds = currentSelection[type];
+      const nextSelection = selectedIds.includes(iconId)
+        ? selectedIds.filter((id) => id !== iconId)
+        : [...selectedIds, iconId];
+      const oppositeResourceType = getOppositeResourceType(type);
+
+      if (!canManageIcons) {
+        return {
+          ...currentSelection,
+          ...(oppositeResourceType ? { [oppositeResourceType]: [] } : {}),
+          [type]: selectedIds.includes(iconId) ? [] : [iconId],
+        };
+      }
 
       return {
         ...currentSelection,
-        [type]: selectedIds.includes(iconId)
-          ? selectedIds.filter((id) => id !== iconId)
-          : [...selectedIds, iconId],
+        ...(oppositeResourceType && !selectedIds.includes(iconId)
+          ? { [oppositeResourceType]: [] }
+          : {}),
+        [type]: nextSelection,
       };
     });
   }
@@ -264,10 +285,15 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
       });
     }
 
-    setSelectedIconIds((currentSelection) => ({
-      ...currentSelection,
-      [type]: targetIcons.map((icon) => icon.id),
-    }));
+    setSelectedIconIds((currentSelection) => {
+      const oppositeResourceType = getOppositeResourceType(type);
+
+      return {
+        ...currentSelection,
+        ...(oppositeResourceType ? { [oppositeResourceType]: [] } : {}),
+        [type]: targetIcons.map((icon) => icon.id),
+      };
+    });
   }
 
   function clearIconSelection(type: IconTypeValue) {
@@ -297,6 +323,10 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
   }
 
   function requestDeleteSelected(type: IconTypeValue, title: string) {
+    if (!canManageIcons) {
+      return;
+    }
+
     if (selectedIconIds[type].length === 0) {
       return;
     }
@@ -361,6 +391,9 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
               {user.name ?? "허용된 사용자"}
             </span>
             <span className="text-[#545D70]">{user.email}</span>
+            <span className="rounded-full bg-[#EBF2FF] px-2 py-0.5 text-xs font-semibold text-[#124199]">
+              {canManageIcons ? "관리자" : "사용자"}
+            </span>
           </div>
           <SignOutButton />
         </div>
@@ -372,14 +405,20 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
           description="병합 기준점이 저장되는 원본 아이콘입니다."
           actionLabel="메인 추가"
           emptyTitle="메인 아이콘이 없습니다"
-          emptyDescription="SVG 업로드 후 이곳에 메인 아이콘이 표시됩니다."
+          emptyDescription={
+            canManageIcons
+              ? "SVG 업로드 후 이곳에 메인 아이콘이 표시됩니다."
+              : "관리자가 공용 라이브러리에 추가하면 이곳에 표시됩니다."
+          }
           icons={mainIcons}
           layout="list"
           selectedIds={selectedIconIds[IconType.MAIN]}
+          canManageIcons={canManageIcons}
           isDeleting={deletingType === IconType.MAIN}
           onAdd={() => setUploadType(IconType.MAIN)}
           onClearSelection={() => clearIconSelection(IconType.MAIN)}
           onDeleteSelected={() => requestDeleteSelected(IconType.MAIN, "메인 아이콘")}
+          onEditAnchor={canManageIcons ? setAnchorEditingIcon : undefined}
           onSelectAll={() => selectAllIcons(IconType.MAIN, mainIcons)}
           onToggleIcon={(iconId) => toggleIconSelection(IconType.MAIN, iconId)}
         />
@@ -390,9 +429,14 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
             description="메인 아이콘의 절단 영역에 붙일 아이콘 리소스입니다."
             actionLabel="아이콘 추가"
             emptyTitle="병합용 아이콘이 없습니다"
-            emptyDescription="업로드 후 여러 아이콘 중 하나를 선택할 수 있습니다."
+            emptyDescription={
+              canManageIcons
+                ? "업로드 후 여러 아이콘 중 하나를 선택할 수 있습니다."
+                : "관리자가 공용 라이브러리에 추가하면 이곳에 표시됩니다."
+            }
             icons={mergeIcons}
             selectedIds={selectedIconIds[IconType.MERGE_ICON]}
+            canManageIcons={canManageIcons}
             isDeleting={deletingType === IconType.MERGE_ICON}
             onAdd={() => setUploadType(IconType.MERGE_ICON)}
             onClearSelection={() => clearIconSelection(IconType.MERGE_ICON)}
@@ -405,10 +449,15 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
             description="문자나 라벨 형태의 SVG 리소스입니다."
             actionLabel="텍스트 추가"
             emptyTitle="병합용 텍스트가 없습니다"
-            emptyDescription="병합용 텍스트를 업로드하면 별도 섹션으로 관리됩니다."
+            emptyDescription={
+              canManageIcons
+                ? "병합용 텍스트를 업로드하면 별도 섹션으로 관리됩니다."
+                : "관리자가 공용 라이브러리에 추가하면 이곳에 표시됩니다."
+            }
             icons={mergeTexts}
             iconKind="text"
             selectedIds={selectedIconIds[IconType.MERGE_TEXT]}
+            canManageIcons={canManageIcons}
             isDeleting={deletingType === IconType.MERGE_TEXT}
             onAdd={() => setUploadType(IconType.MERGE_TEXT)}
             onClearSelection={() => clearIconSelection(IconType.MERGE_TEXT)}
@@ -427,10 +476,16 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
         />
       </div>
 
-      {uploadType ? (
+      {canManageIcons && uploadType ? (
         <UploadDialog
           type={uploadType}
           onClose={() => setUploadType(null)}
+        />
+      ) : null}
+      {anchorEditingIcon ? (
+        <AnchorEditDialog
+          icon={anchorEditingIcon}
+          onClose={() => setAnchorEditingIcon(null)}
         />
       ) : null}
       {deleteConfirmation ? (
@@ -460,10 +515,12 @@ type IconPanelProps = {
   emptyDescription: string;
   icons: WorkspaceIcon[];
   selectedIds: string[];
+  canManageIcons: boolean;
   isDeleting: boolean;
   onAdd: () => void;
   onClearSelection: () => void;
   onDeleteSelected: () => void;
+  onEditAnchor?: (icon: WorkspaceIcon) => void;
   onSelectAll: () => void;
   onToggleIcon: (iconId: string) => void;
   layout?: "list" | "grid";
@@ -478,10 +535,12 @@ function IconPanel({
   emptyDescription,
   icons,
   selectedIds,
+  canManageIcons,
   isDeleting,
   onAdd,
   onClearSelection,
   onDeleteSelected,
+  onEditAnchor,
   onSelectAll,
   onToggleIcon,
   layout = "grid",
@@ -495,6 +554,7 @@ function IconPanel({
         actionLabel={actionLabel}
         selectedCount={selectedIds.length}
         totalCount={icons.length}
+        canManageIcons={canManageIcons}
         isDeleting={isDeleting}
         onAdd={onAdd}
         onClearSelection={onClearSelection}
@@ -519,6 +579,11 @@ function IconPanel({
               isSelected={selectedIds.includes(icon.id)}
               kind={iconKind}
               layout={layout}
+              onEditAnchor={
+                icon.type === IconType.MAIN && onEditAnchor
+                  ? () => onEditAnchor(icon)
+                  : undefined
+              }
               onToggle={() => onToggleIcon(icon.id)}
             />
           ))
@@ -544,6 +609,7 @@ type SectionHeaderProps = {
   actionLabel: string;
   selectedCount: number;
   totalCount: number;
+  canManageIcons: boolean;
   isDeleting: boolean;
   onAdd: () => void;
   onClearSelection: () => void;
@@ -557,6 +623,7 @@ function SectionHeader({
   actionLabel,
   selectedCount,
   totalCount,
+  canManageIcons,
   isDeleting,
   onAdd,
   onClearSelection,
@@ -601,13 +668,15 @@ function SectionHeader({
             {description}
           </p>
         </div>
-        <Button size="sm" type="button" onClick={onAdd}>
-          {actionLabel}
-        </Button>
+        {canManageIcons ? (
+          <Button size="sm" type="button" onClick={onAdd}>
+            {actionLabel}
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex min-h-9 items-center justify-between gap-3">
-        {hasSelection ? (
+        {canManageIcons && hasSelection ? (
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-[#EBF2FF] px-3 py-1 text-xs font-semibold tracking-[0.25px] text-[#124199]">
               {selectedCount}개 선택됨
@@ -627,43 +696,47 @@ function SectionHeader({
           </div>
         ) : (
           <p className="text-xs leading-4 text-[#747E93]">
-            항목 선택 후 선택 해제와 삭제 액션이 표시됩니다.
+            {canManageIcons
+              ? "항목 선택 후 선택 해제와 삭제 액션이 표시됩니다."
+              : "공용 라이브러리에서 사용할 아이콘을 하나 선택하세요."}
           </p>
         )}
 
-        <div ref={menuRef} className="relative">
-          <Button
-            aria-label="더보기"
-            aria-expanded={isMenuOpen}
-            aria-haspopup="menu"
-            className="border-[#D9DCE3] bg-white text-[#111620] hover:bg-[#F7F8FA]"
-            size="icon-lg"
-            type="button"
-            variant="ghost"
-            onClick={() => setIsMenuOpen((current) => !current)}
-          >
-            <MoreVertical aria-hidden="true" className="size-4" />
-          </Button>
-          {isMenuOpen ? (
-            <div
-              className="absolute right-0 top-9 z-20 w-36 rounded-[10px] border border-[#D9DCE3] bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
-              role="menu"
+        {canManageIcons ? (
+          <div ref={menuRef} className="relative">
+            <Button
+              aria-label="더보기"
+              aria-expanded={isMenuOpen}
+              aria-haspopup="menu"
+              className="border-[#D9DCE3] bg-white text-[#111620] hover:bg-[#F7F8FA]"
+              size="icon-lg"
+              type="button"
+              variant="ghost"
+              onClick={() => setIsMenuOpen((current) => !current)}
             >
-              <button
-                className="flex w-full cursor-pointer items-center rounded-[8px] px-3 py-2 text-left text-sm font-medium text-[#111620] hover:bg-[#EBF2FF] disabled:cursor-not-allowed disabled:text-[#9AA3B5] disabled:hover:bg-transparent"
-                disabled={totalCount === 0 || isAllSelected}
-                role="menuitem"
-                type="button"
-                onClick={() => {
-                  onSelectAll();
-                  setIsMenuOpen(false);
-                }}
+              <MoreVertical aria-hidden="true" className="size-4" />
+            </Button>
+            {isMenuOpen ? (
+              <div
+                className="absolute right-0 top-9 z-20 w-36 rounded-[10px] border border-[#D9DCE3] bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+                role="menu"
               >
-                {isAllSelected ? "전체 선택됨" : "전체 선택"}
-              </button>
-            </div>
-          ) : null}
-        </div>
+                <button
+                  className="flex w-full cursor-pointer items-center rounded-[8px] px-3 py-2 text-left text-sm font-medium text-[#111620] hover:bg-[#EBF2FF] disabled:cursor-not-allowed disabled:text-[#9AA3B5] disabled:hover:bg-transparent"
+                  disabled={totalCount === 0 || isAllSelected}
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    onSelectAll();
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  {isAllSelected ? "전체 선택됨" : "전체 선택"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -674,10 +747,11 @@ type IconCardProps = {
   isSelected: boolean;
   layout: "list" | "grid";
   kind: "icon" | "text";
+  onEditAnchor?: () => void;
   onToggle: () => void;
 };
 
-function IconCard({ icon, isSelected, layout, kind, onToggle }: IconCardProps) {
+function IconCard({ icon, isSelected, layout, kind, onEditAnchor, onToggle }: IconCardProps) {
   const isList = layout === "list";
   const isText = kind === "text";
   const cardStyle =
@@ -694,16 +768,31 @@ function IconCard({ icon, isSelected, layout, kind, onToggle }: IconCardProps) {
 
   return (
     <IconTooltip content={icon.name} fullWidth={!isText}>
-      <button
-        aria-label={icon.name}
-        aria-pressed={isSelected}
-        className={cardClassName}
-        style={cardStyle}
-        type="button"
-        onClick={onToggle}
-      >
-        <IconPreview icon={icon} kind={kind} compact={isList} />
-      </button>
+      <span className={isText ? "group relative inline-flex shrink-0" : "group relative inline-flex w-full"}>
+        <button
+          aria-label={icon.name}
+          aria-pressed={isSelected}
+          className={cardClassName}
+          style={cardStyle}
+          type="button"
+          onClick={onToggle}
+        >
+          <IconPreview icon={icon} kind={kind} compact={isList} />
+        </button>
+        {onEditAnchor ? (
+          <button
+            aria-label={`${icon.name} anchor 수정`}
+            className="absolute left-1.5 top-1.5 z-10 flex size-7 cursor-pointer items-center justify-center rounded-full border border-[#D9DCE3] bg-white/95 text-[#545D70] opacity-0 shadow-[0_2px_8px_rgba(0,0,0,0.10)] transition hover:border-[#1E6FFF] hover:text-[#1E6FFF] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20 group-hover:opacity-100"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEditAnchor();
+            }}
+          >
+            <Crosshair aria-hidden="true" className="size-3.5" />
+          </button>
+        ) : null}
+      </span>
     </IconTooltip>
   );
 }
@@ -721,7 +810,7 @@ function IconPreview({ icon, kind, compact = false }: IconPreviewProps) {
       : "[&_svg]:h-10 [&_svg]:w-10";
   const lineIconClass =
     kind === "icon"
-      ? "text-[#111620] [&_svg_*]:fill-none [&_svg_*]:stroke-current"
+      ? "svg-line-preview text-[#111620]"
       : "text-[#111620]";
   const surfaceClass = compact ? "bg-[#F7F8FA]" : "bg-transparent";
 
@@ -889,6 +978,253 @@ function DeleteConfirmDialog({
           </Button>
         </div>
       </section>
+    </div>
+  );
+}
+
+type AnchorEditDialogProps = {
+  icon: WorkspaceIcon;
+  onClose: () => void;
+};
+
+function AnchorEditDialog({
+  icon,
+  onClose,
+}: AnchorEditDialogProps) {
+  const router = useRouter();
+  const anchorStageRef = useRef<HTMLDivElement>(null);
+  const anchorImageRef = useRef<HTMLDivElement>(null);
+  const [anchorX, setAnchorX] = useState(formatCoordinate(icon.anchorX ?? 0));
+  const [anchorY, setAnchorY] = useState(formatCoordinate(icon.anchorY ?? 0));
+  const [isDraggingAnchor, setIsDraggingAnchor] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const previewSize = {
+    width: icon.width,
+    height: icon.height,
+  };
+  const anchorPosition = useMemo(() => {
+    const x = Number(anchorX);
+    const y = Number(anchorY);
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+
+    return {
+      left: `${Math.min(Math.max((x / previewSize.width) * 100, 0), 100)}%`,
+      top: `${Math.min(Math.max((y / previewSize.height) * 100, 0), 100)}%`,
+    };
+  }, [anchorX, anchorY, previewSize.height, previewSize.width]);
+
+  function updateAnchorFromPointer(event: PointerEvent<HTMLDivElement>) {
+    if (!anchorStageRef.current) {
+      return;
+    }
+
+    const imageRect =
+      anchorImageRef.current?.getBoundingClientRect() ??
+      getContainedRect(anchorStageRef.current.getBoundingClientRect(), previewSize);
+    const x = clamp(
+      ((event.clientX - imageRect.left) / imageRect.width) * previewSize.width,
+      0,
+      previewSize.width,
+    );
+    const y = clamp(
+      ((event.clientY - imageRect.top) / imageRect.height) * previewSize.height,
+      0,
+      previewSize.height,
+    );
+
+    setAnchorX(formatCoordinate(x));
+    setAnchorY(formatCoordinate(y));
+    setErrorMessage(null);
+  }
+
+  function handleAnchorPointerDown(event: PointerEvent<HTMLDivElement>) {
+    updateAnchorFromPointer(event);
+    setIsDraggingAnchor(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleAnchorPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (isDraggingAnchor) {
+      updateAnchorFromPointer(event);
+    }
+  }
+
+  function handleAnchorPointerUp(event: PointerEvent<HTMLDivElement>) {
+    setIsDraggingAnchor(false);
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function resetToOriginalAnchor() {
+    setAnchorX(formatCoordinate(icon.anchorX ?? 0));
+    setAnchorY(formatCoordinate(icon.anchorY ?? 0));
+    setErrorMessage(null);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErrorMessage(null);
+
+    const nextAnchorX = Number(anchorX);
+    const nextAnchorY = Number(anchorY);
+
+    if (!Number.isFinite(nextAnchorX) || !Number.isFinite(nextAnchorY)) {
+      setErrorMessage("anchorX와 anchorY 좌표를 숫자로 입력해 주세요.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch(`/api/icons/${icon.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          anchorX: nextAnchorX,
+          anchorY: nextAnchorY,
+        } satisfies MainIconAnchor),
+      });
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setErrorMessage(data.error ?? "anchor 좌표 저장에 실패했습니다.");
+        return;
+      }
+
+      router.refresh();
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111620]/40 px-6">
+      <form
+        aria-labelledby="anchor-edit-title"
+        aria-modal="true"
+        className="w-full max-w-xl rounded-[16px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.10)]"
+        role="dialog"
+        onSubmit={handleSubmit}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2
+              className="text-xl font-semibold leading-7 text-[#111620]"
+              id="anchor-edit-title"
+            >
+              메인 아이콘 anchor 수정
+            </h2>
+            <p className="mt-1 text-sm leading-5 text-[#545D70]">
+              관리자 전용 설정입니다. 저장하면 공용 라이브러리의 기본 병합 좌표가 변경됩니다.
+            </p>
+          </div>
+          <Button disabled={isSubmitting} size="sm" type="button" variant="ghost" onClick={onClose}>
+            닫기
+          </Button>
+        </div>
+
+        <div className="mt-4 rounded-[12px] border border-[#ECEEF2] bg-[#F7F8FA] p-3">
+          <p className="text-xs font-semibold tracking-[0.25px] text-[#545D70]">
+            수정 대상
+          </p>
+          <p className="mt-1 truncate text-sm font-medium text-[#111620]">
+            {icon.name}
+          </p>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-[1fr_180px]">
+          <div
+            ref={anchorStageRef}
+            className="relative flex min-h-56 touch-none select-none items-center justify-center overflow-hidden rounded-[12px] border border-[#D9DCE3] bg-[#F7F8FA] p-4"
+            role="presentation"
+            style={{
+              cursor: isDraggingAnchor ? "grabbing" : "crosshair",
+            }}
+            onPointerCancel={handleAnchorPointerUp}
+            onPointerDown={handleAnchorPointerDown}
+            onPointerMove={handleAnchorPointerMove}
+            onPointerUp={handleAnchorPointerUp}
+          >
+            <div
+              ref={anchorImageRef}
+              className="pointer-events-none relative h-48 max-w-full"
+              style={{
+                aspectRatio: `${previewSize.width} / ${previewSize.height}`,
+              }}
+            >
+              <div
+                aria-hidden="true"
+                className="svg-line-preview absolute inset-0 flex items-center justify-center [&_svg]:h-full [&_svg]:w-full"
+                dangerouslySetInnerHTML={{ __html: icon.svgContent }}
+              />
+              {anchorPosition ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#1E6FFF] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] before:absolute before:left-1/2 before:top-[-10px] before:h-8 before:w-px before:-translate-x-1/2 before:bg-[#1E6FFF] after:absolute after:left-[-10px] after:top-1/2 after:h-px after:w-8 after:-translate-y-1/2 after:bg-[#1E6FFF]"
+                  style={anchorPosition}
+                />
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block">
+              <span className="text-xs font-semibold text-[#545D70]">anchorX</span>
+              <input
+                className="mt-1 h-11 w-full rounded-[8px] border border-[#D9DCE3] px-3 text-sm outline-none focus:border-[#1E6FFF]"
+                min="0"
+                step="0.5"
+                type="number"
+                value={anchorX}
+                onChange={(event) => setAnchorX(event.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-[#545D70]">anchorY</span>
+              <input
+                className="mt-1 h-11 w-full rounded-[8px] border border-[#D9DCE3] px-3 text-sm outline-none focus:border-[#1E6FFF]"
+                min="0"
+                step="0.5"
+                type="number"
+                value={anchorY}
+                onChange={(event) => setAnchorY(event.target.value)}
+              />
+            </label>
+            <p className="text-xs leading-4 text-[#747E93]">
+              아이콘 위를 클릭하거나 드래그해 병합 시작 좌표를 조정합니다.
+            </p>
+          </div>
+        </div>
+
+        {errorMessage ? (
+          <p className="mt-4 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+            {errorMessage}
+          </p>
+        ) : null}
+
+        <div className="mt-6 flex justify-between gap-2">
+          <Button disabled={isSubmitting} type="button" variant="ghost" onClick={resetToOriginalAnchor}>
+            현재 저장값
+          </Button>
+          <div className="flex gap-2">
+            <Button disabled={isSubmitting} type="button" variant="ghost" onClick={onClose}>
+              취소
+            </Button>
+            <Button disabled={isSubmitting} type="submit">
+              {isSubmitting ? "저장 중..." : "저장"}
+            </Button>
+          </div>
+        </div>
+      </form>
     </div>
   );
 }
@@ -1302,7 +1638,7 @@ function PropertiesPanel({
   const hasMultiplePreviewCandidates =
     selectedMainCount > 1 || selectedResourceCount > 1;
   const resourceKind = resourceIcon?.type === IconType.MERGE_TEXT ? "text" : "icon";
-  const previewDisplaySize = clamp(outputSize, 16, 56);
+  const resultPreviewDisplaySize = clamp(outputSize * 1.5, 32, 64);
   const previewMergedSvg = useMemo(() => {
     if (!mergedPreview) {
       return null;
@@ -1310,11 +1646,15 @@ function PropertiesPanel({
 
     return applySvgProperties(mergedPreview, {
       color: selectedColor,
-      outputHeight: previewDisplaySize,
+      outputHeight: resultPreviewDisplaySize,
       resourceKind,
       strokeWidth,
     });
-  }, [mergedPreview, previewDisplaySize, resourceKind, selectedColor, strokeWidth]);
+  }, [mergedPreview, resultPreviewDisplaySize, resourceKind, selectedColor, strokeWidth]);
+  const resultPreviewDisplayWidth =
+    resourceKind === "text" && previewMergedSvg
+      ? clamp(previewMergedSvg.width, resultPreviewDisplaySize, 144)
+      : resultPreviewDisplaySize;
   const downloadMergedSvg = useMemo(() => {
     if (!mergedPreview) {
       return null;
@@ -1417,14 +1757,22 @@ function PropertiesPanel({
             </p>
           ) : null}
         </div>
-        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-3">
+        <div
+          className={
+            resourceKind === "text"
+              ? "grid grid-cols-[minmax(52px,0.8fr)_auto_minmax(72px,1fr)_auto_minmax(112px,1.5fr)] items-center gap-2"
+              : "grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-3"
+          }
+        >
           <PreviewTile
+            fixedHeight={resourceKind === "text"}
             icon={mainIcon}
             kind="icon"
             label="메인"
           />
           <span className="text-sm font-semibold text-[#747E93]">+</span>
           <PreviewTile
+            fixedHeight={resourceKind === "text"}
             icon={resourceIcon}
             kind={resourceIcon?.type === IconType.MERGE_TEXT ? "text" : "icon"}
             label="리소스"
@@ -1433,7 +1781,9 @@ function PropertiesPanel({
           <PreviewTile
             active
             activeSurface={selectedColor === "#FFFFFF" ? "dark" : "light"}
-            displaySizePx={previewDisplaySize}
+            displaySizePx={resultPreviewDisplaySize}
+            displayWidthPx={resultPreviewDisplayWidth}
+            fixedHeight={resourceKind === "text"}
             icon={previewMergedSvg}
             kind={resourceIcon?.type === IconType.MERGE_TEXT ? "merged-text" : "merged-icon"}
             label="결과"
@@ -1588,6 +1938,8 @@ type PreviewTileProps = {
   active?: boolean;
   activeSurface?: "light" | "dark";
   displaySizePx?: number;
+  displayWidthPx?: number;
+  fixedHeight?: boolean;
 };
 
 function PreviewTile({
@@ -1597,19 +1949,28 @@ function PreviewTile({
   active = false,
   activeSurface = "light",
   displaySizePx,
+  displayWidthPx,
+  fixedHeight = false,
 }: PreviewTileProps) {
   const previewClassName = getPreviewSvgClassName(kind, Boolean(displaySizePx));
+  const isWidePreview = Boolean(
+    displaySizePx && displayWidthPx && displayWidthPx !== displaySizePx,
+  );
+  const tileShapeClassName =
+    fixedHeight || isWidePreview
+      ? "h-28"
+      : "aspect-square";
   const activeClassName =
     activeSurface === "dark"
-      ? "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-[#111620] p-2 text-xs font-semibold text-white"
-      : "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-white p-2 text-xs font-semibold text-[#124199]";
+      ? `flex ${tileShapeClassName} min-w-0 items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-[#111620] p-2 text-xs font-semibold text-white`
+      : `flex ${tileShapeClassName} min-w-0 items-center justify-center rounded-[12px] border border-[#1E6FFF] bg-white p-2 text-xs font-semibold text-[#124199]`;
 
   return (
     <div
       className={
         active
           ? activeClassName
-          : "flex aspect-square min-w-0 items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-2 text-xs font-medium text-[#747E93]"
+          : `flex ${tileShapeClassName} min-w-0 items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-2 text-xs font-medium text-[#747E93]`
       }
     >
       {icon?.svgContent ? (
@@ -1622,7 +1983,7 @@ function PreviewTile({
             displaySizePx
               ? {
                   height: `${displaySizePx}px`,
-                  width: `${displaySizePx}px`,
+                  width: `${displayWidthPx ?? displaySizePx}px`,
                 }
               : undefined
           }
@@ -1648,11 +2009,11 @@ function getPreviewSvgClassName(
   }
 
   if (kind === "merged-text") {
-    return `${baseClassName} svg-merged-text-preview ${customSizeClass}`;
+    return `${baseClassName} ${customSizeClass}`;
   }
 
   if (kind === "merged-icon") {
-    return `${baseClassName} svg-merged-icon-preview ${customSizeClass}`;
+    return `${baseClassName} ${customSizeClass}`;
   }
 
   return `${baseClassName} svg-line-preview [&_svg]:h-8 [&_svg]:w-8`;
@@ -1724,7 +2085,10 @@ function createSvgPropertyStyle(options: {
     const strokeRule = `stroke-width: ${formatDimension(scaledStrokeWidth)} !important;`;
     const textLayerRules =
       options.resourceKind === "text"
-        ? `svg [data-layer="merge"] * { fill: ${options.color} !important; stroke: ${options.color} !important; ${strokeRule} }`
+        ? [
+            `svg [data-layer="merge"] * { color: ${options.color} !important; fill: ${options.color} !important; }`,
+            `svg [data-layer="merge"] [stroke]:not([stroke="none"]) { stroke: ${options.color} !important; }`,
+          ].join("")
         : "";
 
     return [
@@ -2029,5 +2393,17 @@ function isClientSvgFile(file: File) {
 
 function isResourceIconType(type: IconTypeValue): type is ResourceIconType {
   return type === IconType.MERGE_ICON || type === IconType.MERGE_TEXT;
+}
+
+function getOppositeResourceType(type: IconTypeValue): ResourceIconType | null {
+  if (type === IconType.MERGE_ICON) {
+    return IconType.MERGE_TEXT;
+  }
+
+  if (type === IconType.MERGE_TEXT) {
+    return IconType.MERGE_ICON;
+  }
+
+  return null;
 }
 

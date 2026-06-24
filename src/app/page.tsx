@@ -14,9 +14,6 @@ export default async function Home() {
   });
 
   const icons = await prisma.icon.findMany({
-    where: {
-      userId: user.id,
-    },
     orderBy: {
       createdAt: "desc",
     },
@@ -27,6 +24,7 @@ export default async function Home() {
       user={{
         name: user.name,
         email: user.email,
+        role: user.role,
       }}
       icons={icons.map((icon) => ({
         id: icon.id,

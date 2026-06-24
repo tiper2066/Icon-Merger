@@ -1,11 +1,13 @@
 import { withAuth } from "next-auth/middleware";
 
+import { isEmailAllowed } from "@/lib/auth/allowed-emails";
+
 export const proxy = withAuth({
   pages: {
     signIn: "/auth/signin",
   },
   callbacks: {
-    authorized: ({ token }) => Boolean(token?.email),
+    authorized: ({ token }) => isEmailAllowed(token?.email),
   },
 });
 

@@ -1,5 +1,10 @@
 import { IconType } from "@/generated/prisma/client";
-import { getCurrentUser, UnauthorizedError } from "@/lib/auth/current-user";
+import {
+  ForbiddenError,
+  getCurrentUser,
+  requireAdminUser,
+  UnauthorizedError,
+} from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db/prisma";
 import { processSvgFile, SvgProcessingError } from "@/lib/svg/process-svg";
 
@@ -21,7 +26,7 @@ function getIconType(value: string | null) {
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    await getCurrentUser();
     const url = new URL(request.url);
     const type = getIconType(url.searchParams.get("type"));
 
@@ -34,7 +39,6 @@ export async function GET(request: Request) {
 
     const icons = await prisma.icon.findMany({
       where: {
-        userId: user.id,
         ...(type ? { type } : {}),
       },
       orderBy: {
@@ -54,7 +58,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await requireAdminUser();
     const formData = await request.formData();
     const type = getIconType(getStringValue(formData.get("type")));
     const files = formData.getAll("files").filter(isFile);
@@ -111,6 +115,10 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (error instanceof ForbiddenError) {
+      return Response.json({ error: "관리자만 아이콘을 업로드할 수 있습니다." }, { status: 403 });
+    }
+
     if (error instanceof SvgProcessingError) {
       return Response.json({ error: error.message }, { status: 400 });
     }
@@ -121,7 +129,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const user = await getCurrentUser();
+    await requireAdminUser();
     const payload = (await request.json()) as { ids?: unknown };
     const ids = Array.isArray(payload.ids)
       ? payload.ids.filter((id): id is string => typeof id === "string" && id.length > 0)
@@ -139,7 +147,6 @@ export async function DELETE(request: Request) {
         id: {
           in: ids,
         },
-        userId: user.id,
       },
     });
 
@@ -147,6 +154,10 @@ export async function DELETE(request: Request) {
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (error instanceof ForbiddenError) {
+      return Response.json({ error: "관리자만 아이콘을 삭제할 수 있습니다." }, { status: 403 });
     }
 
     throw error;
