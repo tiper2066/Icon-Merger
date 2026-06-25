@@ -983,6 +983,7 @@ icon-merged-{mainIconName}-{mergeIconName}-{size}px.{format}
 
 - 운영 DB 생성
 - 환경 변수 설정
+- Vercel 빌드 전에 `prisma generate` 실행
 - Prisma migration 배포
 - Vercel 프로젝트 생성
 - Google OAuth redirect URI 운영 도메인 반영
@@ -1166,7 +1167,7 @@ MVP 이후 고려할 기능:
 - [x] 8. 속성 패널과 초기화 기능 구현
 - [x] 9. SVG, PNG, JPG 다운로드 구현
 - [x] 10. 사용자/관리자 역할 분리와 공용 아이콘 라이브러리 전환
-- [ ] 11. 테스트, 접근성, 반응형, 배포 설정 보강
+- [x] 11. 테스트, 접근성, 반응형, 배포 설정 보강
 
 ### 11-1단계 구현 결과: 테스트 보강
 
@@ -1269,7 +1270,24 @@ MVP 이후 고려할 기능:
 14. 태블릿 폭, 예: 768px 이상에서는 2컬럼 + 하단 속성 패널 흐름이 깨지지 않는지 확인한다.
 15. 데스크톱 폭에서는 기존 3컬럼 레이아웃이 유지되는지 확인한다.
 
-다음 세부 작업은 배포 설정과 운영 검증 체크리스트 보강이다.
+### 11-4단계 구현 결과: 배포 설정과 운영 검증 체크리스트 보강
+
+Vercel의 깨끗한 빌드 환경에서도 Prisma Client가 생성되도록 `package.json`에 `prebuild` 스크립트를 추가했다.
+
+- `npm run build` 실행 전 `prisma generate`가 자동으로 실행된다.
+- 로컬 개발 서버인 `npm run dev`에는 영향을 주지 않는다.
+- `NEXTAUTH_URL`은 로컬 `.env`에서는 `http://localhost:3000`을 유지하고, Vercel Production 환경 변수에는 실제 배포 URL을 설정한다.
+- Google OAuth 승인된 리디렉션 URI에는 운영 도메인 기준 `/api/auth/callback/google`을 추가한다.
+- Vercel 환경 변수에는 `DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ALLOWED_GOOGLE_EMAILS`, `ADMIN_GOOGLE_EMAILS`를 등록한다.
+- `NEXTAUTH_SECRET`은 운영용 랜덤 문자열로 별도 생성해 사용한다.
+
+검증은 다음 기준으로 완료했다.
+
+- `npx tsc --noEmit` 성공
+- `npm run lint` 성공
+- `npm test` 성공
+- `npm run build` 성공
+- `npm run db:validate` 성공
 
 ### 2단계 구현 결과
 

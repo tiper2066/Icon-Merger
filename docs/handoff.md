@@ -37,6 +37,7 @@
 - Prisma CLI, migration, schema 작업 연결은 `DIRECT_URL`을 우선 사용한다.
 - 현재 Supabase 제약상 `DATABASE_URL`은 Transaction Pooler, `DIRECT_URL`은 Session Pooler로 설정해 테스트했다.
 - Prisma 7 런타임 연결은 `@prisma/adapter-pg`를 사용하는 `src/lib/db/prisma.ts` 싱글턴을 기준으로 한다.
+- Vercel의 깨끗한 빌드 환경에서 Prisma Client가 생성되도록 `package.json`의 `prebuild`에서 `prisma generate`를 실행한다.
 - 사내망 이전 DB: Docker 기반 PostgreSQL
 - 인증: Google OAuth
 - 로그인 제한: 허용된 Google 이메일 계정만 접근 가능
@@ -47,6 +48,8 @@
 - NextAuth 설정은 `src/lib/auth/options.ts`, OAuth Route Handler는 `src/app/api/auth/[...nextauth]/route.ts`, 보호 라우팅은 Next.js 16 `src/proxy.ts`에 있다.
 - 로그인 UI는 `src/app/auth/signin/page.tsx`, 로그인/로그아웃 버튼은 `src/components/auth/`에 있다.
 - Google OAuth callback URL은 로컬 기준 `http://localhost:3000/api/auth/callback/google`이다.
+- Vercel Production의 `NEXTAUTH_URL`은 실제 배포 URL로 설정하고, Google OAuth callback URL도 운영 도메인 기준 `/api/auth/callback/google`을 추가해야 한다.
+- Vercel 환경 변수에는 `DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ALLOWED_GOOGLE_EMAILS`, `ADMIN_GOOGLE_EMAILS`를 등록한다.
 - API에서 현재 앱 사용자는 `src/lib/auth/current-user.ts`가 세션 이메일 기준으로 보장하고, `role`과 `isAdmin`을 함께 제공한다.
 
 ## 저장 전략
@@ -168,10 +171,16 @@
 
 `docs/development-plan.md`의 `21. 권장 개발 순서 요약` 체크리스트를 따라 진행한다.
 
-1. 11-4 배포 설정과 운영 검증 체크리스트 보강
+1. Vercel 프로젝트에 운영 환경 변수를 등록하고 배포한다.
+2. 운영 도메인에서 Google OAuth 로그인, 관리자 업로드/삭제, 일반 사용자 병합/다운로드를 smoke test한다.
 
 ## 최근 검증 결과
 
+- 11-4 배포 설정 보강 후 `npx tsc --noEmit` 성공
+- 11-4 배포 설정 보강 후 `npm run lint` 성공
+- 11-4 배포 설정 보강 후 `npm test` 성공
+- 11-4 배포 설정 보강 후 `npm run build` 성공
+- 11-4 배포 설정 보강 후 `npm run db:validate` 성공
 - 11-3 사용자 피드백 반영 후 `npm run lint` 성공
 - 11-3 사용자 피드백 반영 후 `npm test` 성공
 - 11-3 사용자 피드백 반영 후 `npm run build` 성공
