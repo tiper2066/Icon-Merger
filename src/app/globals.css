@@ -140,4 +140,18 @@
     fill: none !important;
     stroke: currentColor !important;
   }
+
+  .mobile-properties-drawer {
+    animation: mobile-properties-drawer-in 180ms ease-out;
+  }
+}
+
+@keyframes mobile-properties-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
 }

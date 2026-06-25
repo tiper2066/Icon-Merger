@@ -11,12 +11,16 @@ import {
   Type,
   UploadCloud,
   MoreVertical,
+  Menu,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
+  type CSSProperties,
   type DragEvent,
   type FormEvent,
+  type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
   useEffect,
@@ -64,6 +68,7 @@ const downloadFormatOptions = [
 type IconTypeValue = (typeof IconType)[keyof typeof IconType];
 type UploadType = typeof IconType.MAIN | typeof IconType.MERGE_ICON | typeof IconType.MERGE_TEXT;
 type DownloadFormat = "svg" | "png" | "jpg";
+type MobileResourceTab = typeof IconType.MERGE_ICON | typeof IconType.MERGE_TEXT;
 
 export type WorkspaceIcon = {
   id: string;
@@ -113,6 +118,10 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
   const router = useRouter();
   const canManageIcons = user.role === "admin";
   const [uploadType, setUploadType] = useState<UploadType | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobilePropertiesOpen, setIsMobilePropertiesOpen] = useState(false);
+  const [activeMobileResourceTab, setActiveMobileResourceTab] =
+    useState<MobileResourceTab>(IconType.MERGE_ICON);
   const [selectedIconIds, setSelectedIconIds] = useState<SelectedIconIds>(
     emptySelectedIconIds,
   );
@@ -198,6 +207,15 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
 
     return mergeSvgsByAnchor(selectedMainIcon, selectedResourceIcon);
   }, [selectedMainIcon, selectedResourceIcon]);
+  const canOpenMobileProperties = Boolean(
+    selectedMainIcon && selectedResourceIcon && mergedPreview,
+  );
+  const isMobilePropertiesDrawerOpen =
+    isMobilePropertiesOpen && canOpenMobileProperties;
+  const mobilePropertiesButtonLabel =
+    selectedResourceIcon?.type === IconType.MERGE_TEXT
+      ? "메인 + 텍스트 : 결과 조정하기"
+      : "메인 + 아이콘 : 결과 조정하기";
 
   function toggleIconSelection(type: IconTypeValue, iconId: string) {
     const isSelected = selectedIconIds[type].includes(iconId);
@@ -376,16 +394,16 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
 
   return (
     <main className="min-h-screen bg-[#F7F8FA] text-[#111620]">
-      <header className="flex min-h-16 items-center justify-between border-b border-[#D9DCE3] bg-white px-8">
+      <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-[#D9DCE3] bg-white px-4 md:px-8">
         <div>
           <p className="text-xs font-medium tracking-[0.25px] text-[#1E6FFF]">
             ICON Merger
           </p>
-          <h1 className="text-xl font-semibold leading-7 text-[#111620]">
+          <h1 className="text-lg font-semibold leading-6 text-[#111620] md:text-xl md:leading-7">
             SVG 아이콘 작업 공간
           </h1>
         </div>
-        <div className="flex items-center gap-5">
+        <div className="hidden items-center gap-5 md:flex">
           <div className="flex items-center gap-2 whitespace-nowrap text-sm">
             <span className="font-medium text-[#111620]">
               {user.name ?? "허용된 사용자"}
@@ -397,9 +415,47 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
           </div>
           <SignOutButton />
         </div>
+        <Button
+          aria-controls="mobile-menu"
+          aria-expanded={isMobileMenuOpen}
+          aria-label={isMobileMenuOpen ? "모바일 메뉴 닫기" : "모바일 메뉴 열기"}
+          className="border-[#D9DCE3] bg-white text-[#111620] hover:bg-[#F7F8FA] md:hidden"
+          size="icon"
+          type="button"
+          variant="ghost"
+          onClick={() => setIsMobileMenuOpen((current) => !current)}
+        >
+          {isMobileMenuOpen ? (
+            <X aria-hidden="true" className="size-4" />
+          ) : (
+            <Menu aria-hidden="true" className="size-4" />
+          )}
+        </Button>
       </header>
 
-      <div className="grid min-h-[calc(100vh-4rem)] grid-cols-[minmax(196px,0.8fr)_minmax(440px,2fr)_minmax(300px,1fr)] gap-6 p-6">
+      {isMobileMenuOpen ? (
+        <div
+          className="fixed left-4 right-4 top-18 z-40 rounded-[16px] border border-[#D9DCE3] bg-white p-4 shadow-[0_12px_32px_rgba(17,22,32,0.16)] md:hidden"
+          id="mobile-menu"
+        >
+          <div className="flex items-center justify-between gap-4 rounded-[12px] border border-[#ECEEF2] bg-[#F7F8FA] p-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-semibold text-[#111620]">
+                  {user.name ?? "허용된 사용자"}
+                </p>
+                <span className="shrink-0 rounded-full bg-[#EBF2FF] px-2 py-0.5 text-xs font-semibold text-[#124199]">
+                  {canManageIcons ? "관리자" : "사용자"}
+                </span>
+              </div>
+              <p className="mt-2 break-all text-sm text-[#545D70]">{user.email}</p>
+            </div>
+            <SignOutButton />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid min-h-[calc(100vh-4rem)] grid-cols-1 gap-4 p-4 pb-28 md:grid-cols-[minmax(180px,0.8fr)_minmax(360px,1.2fr)] md:gap-5 md:p-5 lg:grid-cols-[minmax(196px,0.8fr)_minmax(440px,2fr)_minmax(300px,1fr)] lg:gap-6 lg:p-6">
         <IconPanel
           title="메인 아이콘"
           description="병합 기준점이 저장되는 원본 아이콘입니다."
@@ -423,7 +479,7 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
           onToggleIcon={(iconId) => toggleIconSelection(IconType.MAIN, iconId)}
         />
 
-        <section className="flex min-w-0 flex-col gap-6">
+        <section className="hidden min-w-0 flex-col gap-6 md:flex">
           <ResourceSection
             title="병합용 아이콘"
             description="메인 아이콘의 절단 영역에 붙일 아이콘 리소스입니다."
@@ -467,14 +523,96 @@ export function IconWorkspace({ user, icons }: IconWorkspaceProps) {
           />
         </section>
 
-        <PropertiesPanel
-          mainIcon={selectedMainIcon}
-          mergedPreview={mergedPreview}
-          resourceIcon={selectedResourceIcon}
-          selectedMainCount={selectedMainCount}
-          selectedResourceCount={selectedResourceCount}
+        <MobileResourceTabs
+          activeTab={activeMobileResourceTab}
+          canManageIcons={canManageIcons}
+          deletingType={deletingType}
+          mergeIcons={mergeIcons}
+          mergeTexts={mergeTexts}
+          selectedIconIds={selectedIconIds}
+          onAdd={(type) => setUploadType(type)}
+          onClearSelection={clearIconSelection}
+          onDeleteSelected={requestDeleteSelected}
+          onSelectAll={selectAllIcons}
+          onTabChange={setActiveMobileResourceTab}
+          onToggleIcon={toggleIconSelection}
         />
+
+        <div className="hidden md:col-span-2 md:block lg:col-span-1">
+          <PropertiesPanel
+            mainIcon={selectedMainIcon}
+            mergedPreview={mergedPreview}
+            resourceIcon={selectedResourceIcon}
+            selectedMainCount={selectedMainCount}
+            selectedResourceCount={selectedResourceCount}
+          />
+        </div>
       </div>
+
+      {canOpenMobileProperties && !isMobilePropertiesDrawerOpen ? (
+        <div className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:hidden">
+          <Button
+            aria-label="선택한 조합의 결과 속성 열기"
+            className="h-12 w-full rounded-[14px] shadow-[0_8px_24px_rgba(30,111,255,0.28)]"
+            size="lg"
+            type="button"
+            onClick={() => setIsMobilePropertiesOpen(true)}
+          >
+            {mobilePropertiesButtonLabel}
+          </Button>
+        </div>
+      ) : null}
+
+      {isMobilePropertiesDrawerOpen ? (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <button
+            aria-label="속성 패널 닫기"
+            className="absolute inset-0 cursor-default bg-[#111620]/40"
+            type="button"
+            onClick={() => setIsMobilePropertiesOpen(false)}
+          />
+          <div
+            aria-labelledby="mobile-properties-drawer-title"
+            aria-modal="true"
+            className="mobile-properties-drawer absolute inset-y-0 right-0 flex w-[min(92vw,420px)] flex-col bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.16)]"
+            role="dialog"
+          >
+            <div className="flex items-center justify-between border-b border-[#D9DCE3] px-4 py-3">
+              <div>
+                <p className="text-xs font-medium tracking-[0.25px] text-[#1E6FFF]">
+                  결과 조정
+                </p>
+                <h2
+                  className="text-base font-semibold text-[#111620]"
+                  id="mobile-properties-drawer-title"
+                >
+                  아이콘 속성
+                </h2>
+              </div>
+              <Button
+                aria-label="속성 패널 닫기"
+                className="border-[#D9DCE3] bg-white text-[#111620] hover:bg-[#F7F8FA]"
+                size="icon"
+                type="button"
+                variant="ghost"
+                onClick={() => setIsMobilePropertiesOpen(false)}
+              >
+                <X aria-hidden="true" className="size-4" />
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#F7F8FA] p-4">
+              <PropertiesPanel
+                idPrefix="mobile-properties-panel"
+                mainIcon={selectedMainIcon}
+                mergedPreview={mergedPreview}
+                resourceIcon={selectedResourceIcon}
+                selectedMainCount={selectedMainCount}
+                selectedResourceCount={selectedResourceCount}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {canManageIcons && uploadType ? (
         <UploadDialog
@@ -546,11 +684,20 @@ function IconPanel({
   layout = "grid",
   iconKind = "icon",
 }: IconPanelProps) {
+  const sectionId = createDomId("icon-section", title);
+  const descriptionId = `${sectionId}-description`;
+
   return (
-    <section className="flex min-h-0 min-w-0 flex-col rounded-[16px] border border-[#ECEEF2] bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+    <section
+      aria-describedby={descriptionId}
+      aria-labelledby={sectionId}
+      className="flex min-h-0 min-w-0 flex-col rounded-[16px] border border-[#ECEEF2] bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]"
+    >
       <SectionHeader
         title={title}
         description={description}
+        descriptionId={descriptionId}
+        titleId={sectionId}
         actionLabel={actionLabel}
         selectedCount={selectedIds.length}
         totalCount={icons.length}
@@ -563,13 +710,15 @@ function IconPanel({
       />
 
       <div
+        aria-label={icons.length > 0 ? `${title} 목록` : undefined}
         className={
           layout === "list"
-            ? "mt-5 grid grid-cols-2 gap-3 overflow-y-auto"
+            ? "mt-5 grid grid-cols-3 gap-2 overflow-y-auto md:grid-cols-2 md:gap-3"
             : iconKind === "text"
               ? "mt-5 flex flex-wrap items-start gap-4 overflow-y-auto"
               : "mt-5 grid grid-cols-[repeat(auto-fill,64px)] gap-3 overflow-y-auto"
         }
+        role={icons.length > 0 ? "list" : undefined}
       >
         {icons.length > 0 ? (
           icons.map((icon) => (
@@ -603,9 +752,126 @@ function ResourceSection(props: Omit<IconPanelProps, "layout">) {
   return <IconPanel {...props} layout="grid" />;
 }
 
+type MobileResourceTabsProps = {
+  activeTab: MobileResourceTab;
+  mergeIcons: WorkspaceIcon[];
+  mergeTexts: WorkspaceIcon[];
+  selectedIconIds: SelectedIconIds;
+  canManageIcons: boolean;
+  deletingType: IconTypeValue | null;
+  onAdd: (type: UploadType) => void;
+  onClearSelection: (type: IconTypeValue) => void;
+  onDeleteSelected: (type: IconTypeValue, title: string) => void;
+  onSelectAll: (type: IconTypeValue, targetIcons: WorkspaceIcon[]) => void;
+  onTabChange: (tab: MobileResourceTab) => void;
+  onToggleIcon: (type: IconTypeValue, iconId: string) => void;
+};
+
+function MobileResourceTabs({
+  activeTab,
+  mergeIcons,
+  mergeTexts,
+  selectedIconIds,
+  canManageIcons,
+  deletingType,
+  onAdd,
+  onClearSelection,
+  onDeleteSelected,
+  onSelectAll,
+  onTabChange,
+  onToggleIcon,
+}: MobileResourceTabsProps) {
+  const activeTabConfig =
+    activeTab === IconType.MERGE_TEXT
+      ? {
+          actionLabel: "텍스트 추가",
+          description: "문자나 라벨 형태의 SVG 리소스입니다.",
+          emptyDescription: canManageIcons
+            ? "병합용 텍스트를 업로드하면 별도 섹션으로 관리됩니다."
+            : "관리자가 공용 라이브러리에 추가하면 이곳에 표시됩니다.",
+          emptyTitle: "병합용 텍스트가 없습니다",
+          iconKind: "text" as const,
+          icons: mergeTexts,
+          title: "병합용 텍스트",
+        }
+      : {
+          actionLabel: "아이콘 추가",
+          description: "메인 아이콘의 절단 영역에 붙일 아이콘 리소스입니다.",
+          emptyDescription: canManageIcons
+            ? "업로드 후 여러 아이콘 중 하나를 선택할 수 있습니다."
+            : "관리자가 공용 라이브러리에 추가하면 이곳에 표시됩니다.",
+          emptyTitle: "병합용 아이콘이 없습니다",
+          iconKind: "icon" as const,
+          icons: mergeIcons,
+          title: "병합용 아이콘",
+        };
+
+  return (
+    <section
+      aria-label="병합 리소스 선택"
+      className="min-w-0 md:hidden"
+    >
+      <div
+        className="mb-3 grid grid-cols-2 gap-2 rounded-[14px] border border-[#D9DCE3] bg-white p-1"
+        role="tablist"
+        aria-label="병합 리소스 종류"
+      >
+        <button
+          aria-selected={activeTab === IconType.MERGE_ICON}
+          className={
+            activeTab === IconType.MERGE_ICON
+              ? "h-10 rounded-[10px] bg-[#EBF2FF] text-sm font-semibold text-[#124199]"
+              : "h-10 rounded-[10px] text-sm font-medium text-[#545D70]"
+          }
+          role="tab"
+          type="button"
+          onClick={() => onTabChange(IconType.MERGE_ICON)}
+        >
+          아이콘
+        </button>
+        <button
+          aria-selected={activeTab === IconType.MERGE_TEXT}
+          className={
+            activeTab === IconType.MERGE_TEXT
+              ? "h-10 rounded-[10px] bg-[#EBF2FF] text-sm font-semibold text-[#124199]"
+              : "h-10 rounded-[10px] text-sm font-medium text-[#545D70]"
+          }
+          role="tab"
+          type="button"
+          onClick={() => onTabChange(IconType.MERGE_TEXT)}
+        >
+          텍스트
+        </button>
+      </div>
+
+      <div role="tabpanel">
+        <ResourceSection
+          actionLabel={activeTabConfig.actionLabel}
+          canManageIcons={canManageIcons}
+          description={activeTabConfig.description}
+          emptyDescription={activeTabConfig.emptyDescription}
+          emptyTitle={activeTabConfig.emptyTitle}
+          iconKind={activeTabConfig.iconKind}
+          icons={activeTabConfig.icons}
+          isDeleting={deletingType === activeTab}
+          selectedIds={selectedIconIds[activeTab]}
+          title={activeTabConfig.title}
+          onAdd={() => onAdd(activeTab)}
+          onClearSelection={() => onClearSelection(activeTab)}
+          onDeleteSelected={() => onDeleteSelected(activeTab, activeTabConfig.title)}
+          onSelectAll={() => onSelectAll(activeTab, activeTabConfig.icons)}
+          onToggleIcon={(iconId) => onToggleIcon(activeTab, iconId)}
+        />
+      </div>
+    </section>
+  );
+}
+
 type SectionHeaderProps = {
   title: string;
   description: string;
+  titleId: string;
+  descriptionId: string;
   actionLabel: string;
   selectedCount: number;
   totalCount: number;
@@ -620,6 +886,8 @@ type SectionHeaderProps = {
 function SectionHeader({
   title,
   description,
+  titleId,
+  descriptionId,
   actionLabel,
   selectedCount,
   totalCount,
@@ -661,10 +929,16 @@ function SectionHeader({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold leading-7 text-[#111620]">
+          <h2
+            className="text-xl font-semibold leading-7 text-[#111620]"
+            id={titleId}
+          >
             {title}
           </h2>
-          <p className="mt-1 text-sm leading-5 text-[#545D70]">
+          <p
+            className="mt-1 text-sm leading-5 text-[#545D70]"
+            id={descriptionId}
+          >
             {description}
           </p>
         </div>
@@ -678,7 +952,10 @@ function SectionHeader({
       <div className="flex min-h-9 items-center justify-between gap-3">
         {canManageIcons && hasSelection ? (
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-[#EBF2FF] px-3 py-1 text-xs font-semibold tracking-[0.25px] text-[#124199]">
+            <span
+              aria-live="polite"
+              className="rounded-full bg-[#EBF2FF] px-3 py-1 text-xs font-semibold tracking-[0.25px] text-[#124199]"
+            >
               {selectedCount}개 선택됨
             </span>
             <Button size="sm" variant="ghost" type="button" onClick={onClearSelection}>
@@ -705,7 +982,7 @@ function SectionHeader({
         {canManageIcons ? (
           <div ref={menuRef} className="relative">
             <Button
-              aria-label="더보기"
+              aria-label={`${title} 더보기`}
               aria-expanded={isMenuOpen}
               aria-haspopup="menu"
               className="border-[#D9DCE3] bg-white text-[#111620] hover:bg-[#F7F8FA]"
@@ -756,19 +1033,24 @@ function IconCard({ icon, isSelected, layout, kind, onEditAnchor, onToggle }: Ic
   const isText = kind === "text";
   const cardStyle =
     isText
-      ? { width: `${getTextCardWidth(icon)}px` }
+      ? {
+          "--text-card-width": `${getTextCardWidth(icon)}px`,
+          "--text-card-mobile-width": `${getMobileTextCardWidth(icon)}px`,
+        } as TextCardStyle
       : undefined;
   const cardClassName = isText
     ? isSelected
-      ? "group relative flex h-[88px] shrink-0 cursor-pointer items-center justify-center rounded-[12px] border-2 border-[#1E6FFF] bg-[#EBF2FF] p-3 transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
-      : "group relative flex h-[88px] shrink-0 cursor-pointer items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-3 transition hover:border-[#99BFFF] hover:bg-[#EBF2FF] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
+      ? "group relative flex h-14 w-[var(--text-card-mobile-width)] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-2 border-[#1E6FFF] bg-[#EBF2FF] p-2 transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20 md:h-[88px] md:w-[var(--text-card-width)] md:rounded-[12px] md:p-3"
+      : "group relative flex h-14 w-[var(--text-card-mobile-width)] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-[#D9DCE3] bg-white p-2 transition hover:border-[#99BFFF] hover:bg-[#EBF2FF] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20 md:h-[88px] md:w-[var(--text-card-width)] md:rounded-[12px] md:p-3"
     : isSelected
-      ? "group relative flex aspect-square w-full cursor-pointer items-center justify-center rounded-[12px] border-2 border-[#1E6FFF] bg-[#EBF2FF] p-3 transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20"
-      : "group relative flex aspect-square w-full cursor-pointer items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-3 transition hover:border-[#99BFFF] hover:bg-[#EBF2FF] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20";
+      ? "group relative flex aspect-square w-full cursor-pointer items-center justify-center rounded-[10px] border-2 border-[#1E6FFF] bg-[#EBF2FF] p-2 transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20 md:rounded-[12px] md:p-3"
+      : "group relative flex aspect-square w-full cursor-pointer items-center justify-center rounded-[10px] border border-[#D9DCE3] bg-white p-2 transition hover:border-[#99BFFF] hover:bg-[#EBF2FF] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#1E6FFF]/20 md:rounded-[12px] md:p-3";
 
   return (
     <IconTooltip content={icon.name} fullWidth={!isText}>
-      <span className={isText ? "group relative inline-flex shrink-0" : "group relative inline-flex w-full"}>
+      <span
+        className={isText ? "group relative inline-flex shrink-0" : "group relative inline-flex w-full"}
+      >
         <button
           aria-label={icon.name}
           aria-pressed={isSelected}
@@ -803,10 +1085,15 @@ type IconPreviewProps = {
   compact?: boolean;
 };
 
+type TextCardStyle = CSSProperties & {
+  "--text-card-width": string;
+  "--text-card-mobile-width": string;
+};
+
 function IconPreview({ icon, kind, compact = false }: IconPreviewProps) {
   const iconSizeClass =
     kind === "text"
-      ? "[&_svg]:h-10 [&_svg]:w-auto [&_svg]:max-w-full"
+      ? "[&_svg]:h-6 [&_svg]:w-auto [&_svg]:max-w-full md:[&_svg]:h-10"
       : "[&_svg]:h-10 [&_svg]:w-10";
   const lineIconClass =
     kind === "icon"
@@ -842,10 +1129,29 @@ function IconTooltip({ content, children, fullWidth = true }: IconTooltipProps) 
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ left: 0, top: 0 });
 
+  useEffect(() => {
+    if (!isVisible) {
+      return;
+    }
+
+    function hideTooltip() {
+      setIsVisible(false);
+    }
+
+    window.addEventListener("scroll", hideTooltip, true);
+    window.addEventListener("resize", hideTooltip);
+
+    return () => {
+      window.removeEventListener("scroll", hideTooltip, true);
+      window.removeEventListener("resize", hideTooltip);
+    };
+  }, [isVisible]);
+
   function showTooltip() {
     const trigger = triggerRef.current;
 
-    if (!trigger) {
+    if (!trigger || !canShowHoverTooltip()) {
+      setIsVisible(false);
       return;
     }
 
@@ -862,6 +1168,7 @@ function IconTooltip({ content, children, fullWidth = true }: IconTooltipProps) 
     <span
       ref={triggerRef}
       className={fullWidth ? "relative inline-flex w-full" : "relative inline-flex shrink-0"}
+      role="listitem"
       onBlur={() => setIsVisible(false)}
       onFocus={showTooltip}
       onMouseEnter={showTooltip}
@@ -883,6 +1190,14 @@ function IconTooltip({ content, children, fullWidth = true }: IconTooltipProps) 
       ) : null}
     </span>
   );
+}
+
+function canShowHoverTooltip() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 }
 
 type EmptyStateProps = {
@@ -931,6 +1246,7 @@ function DeleteConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111620]/40 px-6">
       <section
+        aria-describedby="delete-confirm-description"
         aria-labelledby="delete-confirm-title"
         aria-modal="true"
         className="w-full max-w-md rounded-[16px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.10)]"
@@ -947,14 +1263,20 @@ function DeleteConfirmDialog({
             >
               선택한 {title} 삭제
             </h2>
-            <p className="mt-2 text-sm leading-5 text-[#545D70]">
+            <p
+              className="mt-2 text-sm leading-5 text-[#545D70]"
+              id="delete-confirm-description"
+            >
               선택한 {selectedCount}개 항목을 삭제합니다. 삭제한 SVG 리소스는 되돌릴 수 없습니다.
             </p>
           </div>
         </div>
 
         {errorMessage ? (
-          <p className="mt-4 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+          <p
+            className="mt-4 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]"
+            role="alert"
+          >
             {errorMessage}
           </p>
         ) : null}
@@ -1109,6 +1431,7 @@ function AnchorEditDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111620]/40 px-6">
       <form
+        aria-describedby="anchor-edit-description"
         aria-labelledby="anchor-edit-title"
         aria-modal="true"
         className="w-full max-w-xl rounded-[16px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.10)]"
@@ -1123,7 +1446,10 @@ function AnchorEditDialog({
             >
               메인 아이콘 anchor 수정
             </h2>
-            <p className="mt-1 text-sm leading-5 text-[#545D70]">
+            <p
+              className="mt-1 text-sm leading-5 text-[#545D70]"
+              id="anchor-edit-description"
+            >
               관리자 전용 설정입니다. 저장하면 공용 라이브러리의 기본 병합 좌표가 변경됩니다.
             </p>
           </div>
@@ -1206,7 +1532,10 @@ function AnchorEditDialog({
         </div>
 
         {errorMessage ? (
-          <p className="mt-4 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+          <p
+            className="mt-4 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]"
+            role="alert"
+          >
             {errorMessage}
           </p>
         ) : null}
@@ -1252,6 +1581,10 @@ function UploadDialog({
   const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
   const isMain = type === IconType.MAIN;
   const copy = getUploadCopy(type);
+  const dialogId = createDomId("upload-dialog", copy.title);
+  const descriptionId = `${dialogId}-description`;
+  const policyId = `${dialogId}-policy`;
+  const selectedFilesId = `${dialogId}-selected-files`;
 
   useEffect(() => {
     return () => {
@@ -1392,6 +1725,15 @@ function UploadDialog({
     setSelectedFiles(event.dataTransfer.files);
   }
 
+  function handleDropzoneKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    fileInputRef.current?.click();
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
@@ -1440,15 +1782,25 @@ function UploadDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111620]/40 px-6">
       <form
+        aria-describedby={descriptionId}
+        aria-labelledby={dialogId}
+        aria-modal="true"
         className="w-full max-w-xl rounded-[16px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.10)]"
+        role="dialog"
         onSubmit={handleSubmit}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold leading-7 text-[#111620]">
+            <h2
+              className="text-xl font-semibold leading-7 text-[#111620]"
+              id={dialogId}
+            >
               {copy.title}
             </h2>
-            <p className="mt-1 text-sm leading-5 text-[#545D70]">
+            <p
+              className="mt-1 text-sm leading-5 text-[#545D70]"
+              id={descriptionId}
+            >
               SVG 파일만 업로드할 수 있으며 최대 256KB까지 허용됩니다.
             </p>
           </div>
@@ -1458,6 +1810,8 @@ function UploadDialog({
         </div>
 
         <div
+          aria-describedby={files.length > 0 ? `${policyId} ${selectedFilesId}` : policyId}
+          aria-label={`${copy.title} 파일 선택 영역`}
           className={
             isDragging
               ? "mt-6 flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-[12px] border border-dashed border-[#1E6FFF] bg-[#EBF2FF] px-6 py-8 text-center"
@@ -1470,6 +1824,7 @@ function UploadDialog({
           }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
+          onKeyDown={handleDropzoneKeyDown}
           role="button"
           tabIndex={0}
         >
@@ -1477,12 +1832,16 @@ function UploadDialog({
           <p className="mt-3 text-sm font-semibold text-[#111620]">
             파일을 드래그하거나 클릭하여 선택
           </p>
-          <p className="mt-1 text-xs text-[#545D70]">
+          <p
+            className="mt-1 text-xs text-[#545D70]"
+            id={policyId}
+          >
             {copy.policy}
           </p>
           <input
             ref={fileInputRef}
             accept=".svg,image/svg+xml"
+            aria-label={`${copy.title} 파일 선택`}
             className="hidden"
             multiple={!isMain}
             onChange={handleInputChange}
@@ -1491,7 +1850,11 @@ function UploadDialog({
         </div>
 
         {files.length > 0 ? (
-          <div className="mt-4 rounded-[12px] border border-[#ECEEF2] bg-[#F7F8FA] p-3">
+          <div
+            aria-live="polite"
+            className="mt-4 rounded-[12px] border border-[#ECEEF2] bg-[#F7F8FA] p-3"
+            id={selectedFilesId}
+          >
             <div className="flex items-center gap-2">
               <p className="text-xs font-semibold tracking-[0.25px] text-[#545D70]">
                 선택된 파일
@@ -1592,7 +1955,10 @@ function UploadDialog({
         ) : null}
 
         {errorMessage ? (
-          <p className="mt-4 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+          <p
+            className="mt-4 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]"
+            role="alert"
+          >
             {errorMessage}
           </p>
         ) : null}
@@ -1616,6 +1982,7 @@ type PropertiesPanelProps = {
   mergedPreview: MergedSvgResult | null;
   selectedMainCount: number;
   selectedResourceCount: number;
+  idPrefix?: string;
 };
 
 function PropertiesPanel({
@@ -1624,6 +1991,7 @@ function PropertiesPanel({
   mergedPreview,
   selectedMainCount,
   selectedResourceCount,
+  idPrefix = "properties-panel",
 }: PropertiesPanelProps) {
   const [selectedColor, setSelectedColor] = useState(defaultIconProperties.color);
   const [strokeWidth, setStrokeWidth] = useState(defaultIconProperties.strokeWidth);
@@ -1717,13 +2085,23 @@ function PropertiesPanel({
   }
 
   return (
-    <aside className="flex min-h-0 flex-col rounded-[16px] border border-[#ECEEF2] bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+    <aside
+      aria-describedby={`${idPrefix}-description`}
+      aria-labelledby={`${idPrefix}-title`}
+      className="flex min-h-0 flex-col rounded-[16px] border border-[#ECEEF2] bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]"
+    >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold leading-7 text-[#111620]">
+          <h2
+            className="text-xl font-semibold leading-7 text-[#111620]"
+            id={`${idPrefix}-title`}
+          >
             아이콘 속성
           </h2>
-          <p className="mt-1 text-sm leading-5 text-[#545D70]">
+          <p
+            className="mt-1 text-sm leading-5 text-[#545D70]"
+            id={`${idPrefix}-description`}
+          >
             색상, 두께, 크기를 조정할 수 있습니다.
           </p>
         </div>
@@ -1811,7 +2189,7 @@ function PropertiesPanel({
           title="색상"
           description="문서 기준 10개 색상을 제공합니다."
         >
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-5 gap-2" role="group" aria-label="아이콘 색상">
             {iconColorOptions.map((color) => (
               <button
                 key={color.value}
@@ -1831,7 +2209,11 @@ function PropertiesPanel({
                 }}
                 type="button"
                 onClick={() => setSelectedColor(color.value)}
-              />
+              >
+                <span className="sr-only">
+                  {selectedColor === color.value ? "선택됨" : "선택 안 됨"}
+                </span>
+              </button>
             ))}
           </div>
         </PropertyGroup>
@@ -1843,6 +2225,7 @@ function PropertiesPanel({
         >
           <input
             aria-label="선 두께"
+            aria-valuetext={`${strokeWidth}px`}
             className="h-2 w-full cursor-pointer accent-[#1E6FFF]"
             max="3"
             min="0.5"
@@ -1865,6 +2248,7 @@ function PropertiesPanel({
         >
           <input
             aria-label="다운로드 크기"
+            aria-valuetext={`${outputSize}px`}
             className="h-2 w-full cursor-pointer accent-[#1E6FFF]"
             max="256"
             min="16"
@@ -1913,7 +2297,10 @@ function PropertiesPanel({
 
       <div className="mt-auto pt-6">
         {downloadError ? (
-          <p className="mb-3 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+          <p
+            className="mb-3 rounded-[12px] border border-[#EF4444]/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]"
+            role="alert"
+          >
             {downloadError}
           </p>
         ) : null}
@@ -2332,6 +2719,16 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function createDomId(prefix: string, label: string) {
+  const hash = Array.from(label).reduce(
+    (accumulator, character) =>
+      (accumulator * 31 + character.charCodeAt(0)) >>> 0,
+    0,
+  );
+
+  return `${prefix}-${hash.toString(36)}`;
+}
+
 function getContainedRect(
   containerRect: DOMRect,
   mediaSize: { width: number; height: number },
@@ -2385,6 +2782,10 @@ function getTextCardWidth(icon: WorkspaceIcon) {
   const ratio = icon.width / icon.height;
 
   return clamp(Math.round(64 * ratio + 24), 104, 176);
+}
+
+function getMobileTextCardWidth(icon: WorkspaceIcon) {
+  return Math.round(getTextCardWidth(icon) * 0.6);
 }
 
 function isClientSvgFile(file: File) {
