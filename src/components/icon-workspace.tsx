@@ -2138,7 +2138,7 @@ function PropertiesPanel({
         <div
           className={
             resourceKind === "text"
-              ? "grid grid-cols-[minmax(52px,0.8fr)_auto_minmax(72px,1fr)_auto_minmax(112px,1.5fr)] items-center gap-2"
+              ? "grid grid-cols-[minmax(52px,0.8fr)_auto_minmax(72px,1fr)] items-center gap-2 md:grid-cols-[minmax(52px,0.8fr)_auto_minmax(72px,1fr)_auto_minmax(112px,1.5fr)]"
               : "grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-3"
           }
         >
@@ -2155,10 +2155,23 @@ function PropertiesPanel({
             kind={resourceIcon?.type === IconType.MERGE_TEXT ? "text" : "icon"}
             label="리소스"
           />
-          <span className="text-sm font-semibold text-[#747E93]">=</span>
+          <span
+            className={
+              resourceKind === "text"
+                ? "hidden text-sm font-semibold text-[#747E93] md:inline"
+                : "text-sm font-semibold text-[#747E93]"
+            }
+          >
+            =
+          </span>
           <PreviewTile
             active
             activeSurface={selectedColor === "#FFFFFF" ? "dark" : "light"}
+            className={
+              resourceKind === "text"
+                ? "col-span-3 w-full justify-self-stretch md:col-span-1 md:justify-self-auto"
+                : undefined
+            }
             displaySizePx={resultPreviewDisplaySize}
             displayWidthPx={resultPreviewDisplayWidth}
             fixedHeight={resourceKind === "text"}
@@ -2327,6 +2340,7 @@ type PreviewTileProps = {
   displaySizePx?: number;
   displayWidthPx?: number;
   fixedHeight?: boolean;
+  className?: string;
 };
 
 function PreviewTile({
@@ -2338,6 +2352,7 @@ function PreviewTile({
   displaySizePx,
   displayWidthPx,
   fixedHeight = false,
+  className,
 }: PreviewTileProps) {
   const previewClassName = getPreviewSvgClassName(kind, Boolean(displaySizePx));
   const isWidePreview = Boolean(
@@ -2356,8 +2371,8 @@ function PreviewTile({
     <div
       className={
         active
-          ? activeClassName
-          : `flex ${tileShapeClassName} min-w-0 items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-2 text-xs font-medium text-[#747E93]`
+          ? `${activeClassName}${className ? ` ${className}` : ""}`
+          : `flex ${tileShapeClassName} min-w-0 items-center justify-center rounded-[12px] border border-[#D9DCE3] bg-white p-2 text-xs font-medium text-[#747E93]${className ? ` ${className}` : ""}`
       }
     >
       {icon?.svgContent ? (
